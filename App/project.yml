@@ -1,0 +1,54 @@
+name: TempoSync
+options:
+  bundleIdPrefix: com.pizzmusic
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+
+packages:
+  RoutineKit:
+    path: ../Packages/RoutineKit
+  BeatKit:
+    path: ../Packages/BeatKit
+  RhythmCoachCore:
+    path: ../Packages/RhythmCoachCore
+
+targets:
+  TempoSync:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+    info:
+      path: Info.plist
+      properties:
+        CFBundleDisplayName: TempoSync
+        # Whole-app dark appearance: the ride screens are gradient-dark by design, and letting the
+        # menus follow the system's light mode caused jarring shifts at every navigation.
+        UIUserInterfaceStyle: Dark
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        # Handlebar-mounted use: keep the screen awake is handled in-app.
+        NSMicrophoneUsageDescription: >-
+          TempoSync listens to your music to sync coaching cues to the beat.
+          Nothing is recorded or uploaded — only beat and energy features are computed on-device.
+        NSAppleMusicUsageDescription: >-
+          TempoSync reads what's currently playing so it can line up coaching cues with the track.
+    dependencies:
+      - package: RoutineKit
+      - package: BeatKit
+      - package: RhythmCoachCore
+    settings:
+      base:
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        GENERATE_INFOPLIST_FILE: NO
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_VERSION: "6.0"
+        # Automatic signing: open in Xcode once and pick your team under Signing & Capabilities,
+        # OR pass DEVELOPMENT_TEAM=XXXXXXXXXX to xcodebuild. A free Apple ID works for development.
+        CODE_SIGN_STYLE: Automatic
+        # Simulator builds don't sign; device builds need your team selected (see DEVICE_TESTING.md).

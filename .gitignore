@@ -1,0 +1,13 @@
+.DS_Store
+.build/
+.swiftpm/
+*.xcodeproj/xcuserdata/
+Packages/*/Fixtures/*.wav
+DerivedData/
+# XcodeGen generates the project from App/project.yml — that YAML is the source of truth.
+App/TempoSync.xcodeproj/
+App/Info.plist
+# Real API keys live here — never commit.
+App/Sources/Secrets.swift
+# Local build products (xcodebuild -derivedDataPath ./build)
+App/build/
