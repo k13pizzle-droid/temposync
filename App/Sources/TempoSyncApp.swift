@@ -7,6 +7,7 @@ struct TempoSyncApp: App {
     private let launchDemo = ProcessInfo.processInfo.environment["TEMPOSYNC_DEMO"] == "1"
     private let launchModeH = ProcessInfo.processInfo.environment["TEMPOSYNC_MODEH"] == "1"
     private let launchClass = ProcessInfo.processInfo.environment["TEMPOSYNC_CLASS"] == "1"
+    private let launchCal = ProcessInfo.processInfo.environment["TEMPOSYNC_CAL"] == "1"
 
     var body: some Scene {
         WindowGroup {
@@ -16,6 +17,8 @@ struct TempoSyncApp: App {
                 ModeHLaunchView()
             } else if launchClass {
                 NavigationStack { ClassSetupView() }
+            } else if launchCal {
+                NavigationStack { CalibrationView() }
             } else {
                 RootView()
             }

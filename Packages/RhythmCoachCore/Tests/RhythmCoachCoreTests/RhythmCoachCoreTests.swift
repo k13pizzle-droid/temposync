@@ -124,6 +124,32 @@ final class RhythmCoachCoreTests: XCTestCase {
         XCTAssertEqual(Grammar.validate(RoutineGenerator().generate(req), request: req), [])
     }
 
+    // MARK: Calibration (streamed) capture → generator
+
+    func testStreamedCaptureProducesValidRoutine() {
+        let fixture = SyntheticFixtures.clickTrack(name: "cal", bpm: 128, durationSeconds: 60,
+                                                   energyJumpAt: 30)
+        let streamer = StreamingAnalyzer(sampleRate: fixture.buffer.sampleRate)
+        var i = 0
+        while i < fixture.buffer.samples.count {
+            let n = min(2048, fixture.buffer.samples.count - i)
+            streamer.feed(Array(fixture.buffer.samples[i..<i+n]))
+            i += n
+        }
+        let map = SectionCapture().capture(trackKey: "cal", streamed: streamer.finalize())
+
+        XCTAssertFalse(map.sections.isEmpty)
+        var expected = 0
+        for s in map.sections {
+            XCTAssertEqual(s.startCount, expected, "streamed sections not contiguous")
+            XCTAssertEqual(s.counts % 32, 0)
+            expected = s.endCount
+        }
+        let req = RoutineRequest(trackKey: map.trackKey, bpm: map.bpm, sections: map.sections,
+                                 confidence: .learned, skillLevel: .two, intensity: .hard, seed: 9)
+        XCTAssertEqual(Grammar.validate(RoutineGenerator().generate(req), request: req), [])
+    }
+
     // (RunSync engine + tests shelved 2026-07-21 → Shelved/RunSync/)
 
     // MARK: TrackTempoResolver

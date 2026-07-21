@@ -2,8 +2,8 @@ import Foundation
 import RoutineKit
 import BeatKit
 
-/// The Mode S learning-loop output (spec §B3): a per-track map derived from a mic playthrough —
-/// beat-grid offset, tempo, and typed, phrase-aligned sections ready for RoutineKit.
+/// The Mode S / calibration learning-loop output (spec §B3): a per-track map derived from a mic
+/// playthrough — beat-grid offset, tempo, and typed, phrase-aligned sections ready for RoutineKit.
 public struct CapturedMap: Sendable, Equatable, Codable {
     public let trackKey: String
     public let bpm: Double
@@ -21,9 +21,9 @@ public struct CapturedMap: Sendable, Equatable, Codable {
     }
 }
 
-/// Turns a BeatKit `BeatAnalysis` (tempo + beat grid + energy-step boundaries) into typed,
-/// phrase-aligned `Section`s. Labeling is energy-rank heuristic for Phase 0 (genre-tuned labeling is
-/// Phase 2); the output is always valid input for the generator.
+/// Turns beat analysis (tempo + beat grid + energy-step boundaries) into typed, phrase-aligned
+/// `Section`s. Labeling is energy-rank heuristic for Phase 0 (genre-tuned labeling is Phase 2);
+/// the output is always valid input for the generator.
 public struct SectionCapture: Sendable {
     public let sectionDetector: SectionDetector
 
@@ -31,17 +31,31 @@ public struct SectionCapture: Sendable {
         self.sectionDetector = sectionDetector
     }
 
+    /// Offline path: capture from a full audio buffer.
     public func capture(trackKey: String, buffer: AudioBuffer, analysis: BeatAnalysis) -> CapturedMap {
+        let (energy, fr) = sectionDetector.energyEnvelope(buffer)
+        return capture(trackKey: trackKey, analysis: analysis, durationSeconds: buffer.durationSeconds,
+                       energy: energy, energyFrameRate: fr)
+    }
+
+    /// Streaming path: capture from a calibration ride's accumulated envelopes (no raw audio).
+    public func capture(trackKey: String, streamed: StreamingAnalyzer.Result) -> CapturedMap {
+        capture(trackKey: trackKey, analysis: streamed.analysis, durationSeconds: streamed.durationSeconds,
+                energy: streamed.energy, energyFrameRate: streamed.energyFrameRate)
+    }
+
+    // MARK: - Shared core
+
+    public func capture(trackKey: String, analysis: BeatAnalysis, durationSeconds: Double,
+                        energy: [Double], energyFrameRate fr: Double) -> CapturedMap {
         let bpm = analysis.tempo.bpm
         let phraseLen = Routine.phraseLength
-        let duration = buffer.durationSeconds
+        let duration = durationSeconds
 
         // Segment edges in seconds: 0, each boundary, end.
         var edges = [0.0] + analysis.sections.map { $0.timeSeconds } + [duration]
         edges = Array(Set(edges)).sorted()
 
-        // Mean energy per segment (from the detector's short-term RMS envelope).
-        let (energy, fr) = sectionDetector.energyEnvelope(buffer)
         func meanEnergy(_ start: Double, _ end: Double) -> Double {
             guard fr > 0, !energy.isEmpty else { return 0 }
             let lo = max(0, Int(start * fr)), hi = min(energy.count, Int(end * fr))

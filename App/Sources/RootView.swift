@@ -22,6 +22,17 @@ struct RootView: View {
                     }
                 }
                 Section {
+                    NavigationLink {
+                        CalibrationView()
+                    } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Calibrate a playlist")
+                            Text("One out-loud listen → real chorus timing forever")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                }
+                Section {
                     NavigationLink("Ride history") { RideHistoryView() }
                 }
             }

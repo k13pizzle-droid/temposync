@@ -58,6 +58,30 @@ final class BeatKitTests: XCTestCase {
         XCTAssertLessThanOrEqual(abs(withPrior.tempo.bpm - 80), 2)
     }
 
+    // MARK: Streaming analyzer (calibration ride path)
+
+    func testStreamingMatchesOfflineAnalysis() {
+        let fixture = SyntheticFixtures.clickTrack(name: "stream", bpm: 128, durationSeconds: 30,
+                                                   energyJumpAt: 15)
+        // Feed in awkward chunk sizes (like a mic tap would) to exercise frame continuity.
+        let streamer = StreamingAnalyzer(sampleRate: fixture.buffer.sampleRate)
+        var i = 0
+        let chunks = [1234, 2048, 777, 4096]
+        while i < fixture.buffer.samples.count {
+            let n = min(chunks[i % chunks.count], fixture.buffer.samples.count - i)
+            streamer.feed(Array(fixture.buffer.samples[i..<i+n]))
+            i += n
+        }
+        let result = streamer.finalize()
+
+        XCTAssertEqual(result.analysis.tempo.bpm, 128, accuracy: 2, "streamed tempo should match truth")
+        XCTAssertEqual(result.durationSeconds, 30, accuracy: 0.1)
+        // Energy jump located near 15 s.
+        let nearest = result.analysis.sections.min(by: { abs($0.timeSeconds - 15) < abs($1.timeSeconds - 15) })
+        XCTAssertNotNil(nearest)
+        XCTAssertLessThan(abs((nearest?.timeSeconds ?? 0) - 15), 1.5)
+    }
+
     // MARK: Empty / degenerate input
 
     func testSilenceDoesNotCrash() {

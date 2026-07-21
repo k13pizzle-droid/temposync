@@ -35,6 +35,11 @@ public struct SectionDetector: Sendable {
 
     public func detect(_ buffer: AudioBuffer, beatGrid: BeatGrid? = nil) -> [SectionBoundary] {
         let (energy, fr) = energyEnvelope(buffer)
+        return boundaries(energy: energy, frameRate: fr, beatGrid: beatGrid)
+    }
+
+    /// Envelope-based path (used by `StreamingAnalyzer`, which never holds raw audio).
+    public func boundaries(energy: [Double], frameRate fr: Double, beatGrid: BeatGrid?) -> [SectionBoundary] {
         guard energy.count > 4 else { return [] }
 
         // Smooth with a short moving average to suppress per-beat ripple.
