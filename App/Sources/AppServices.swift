@@ -35,27 +35,40 @@ enum AppServices {
         return analyzed.bpm
     }
 
+    /// IN-HOUSE full learn: analyze the WHOLE file → BPM + a learned SectionMap (real chorus
+    /// timing) stored under the track's key — the calibration ride, without the microphone.
+    /// Returns the BPM on success. Streamed-only tracks return nil.
+    static func onDeviceLearn(trackKey: String, title: String, artist: String) async -> Double? {
+        guard let url = sharedProvider.assetURL(for: trackKey) else { return nil }
+        guard let result = (try? await AssetTempoAnalyzer.analyzeStructure(url: url)) ?? nil,
+              result.analysis.tempo.strength >= 0.03 else { return nil }
+        let bpm = result.analysis.tempo.bpm
+        makeBPMWaterfall().store(bpm: bpm, title: title, artist: artist, source: "on-device")
+        let map = SectionCapture().capture(trackKey: trackKey, streamed: result)
+        try? SectionMapStore.upsert(map, in: context)
+        return bpm
+    }
+
     /// The class currently being ridden (nil = freestyle). Set by ClassSetupView on start; the live
     /// view model reads per-track roles from it and clears it when the session ends.
     static var activeClassPlan: ClassPlan?
 
     static let apiKeyDefaultsKey = "getsongbpm_api_key"
-    static let effortDefaultsKey = "effort_level"      // "easy" | "medium" | "hard"
-    static let skillDefaultsKey = "skill_tier"         // 1 | 2 | 3
 
-    /// The rider's configured effort dial (Settings → Ride).
-    static var effort: IntensityDial {
-        switch UserDefaults.standard.string(forKey: effortDefaultsKey) {
-        case "easy": return .easy
-        case "hard": return .hard
-        default:     return .medium
-        }
+    /// Per-class difficulty override (set by the class setup dial for the active ride; cleared on stop).
+    static var difficultyOverride: ClassDifficulty?
+
+    /// The effective difficulty: the active class's dial, else the Settings default.
+    static var difficulty: ClassDifficulty {
+        difficultyOverride
+            ?? ClassDifficulty(rawValue: UserDefaults.standard.object(forKey: ClassDifficulty.defaultsKey) == nil
+                               ? 2 : UserDefaults.standard.integer(forKey: ClassDifficulty.defaultsKey))
+            ?? .medium
     }
 
-    /// The rider's configured skill tier (Settings → Ride). Defaults to 2.
-    static var skill: SkillTier {
-        SkillTier(rawValue: UserDefaults.standard.integer(forKey: skillDefaultsKey)) ?? .two
-    }
+    /// One dial drives both knobs the generator takes.
+    static var effort: IntensityDial { difficulty.intensity }
+    static var skill: SkillTier { difficulty.skill }
 
     /// Waterfall: SwiftData cache → seeded fixture table → Deezer (no key, popularity-ranked
     /// search) → GetSongBPM (different coverage). GetSongBPM key precedence: Settings override →

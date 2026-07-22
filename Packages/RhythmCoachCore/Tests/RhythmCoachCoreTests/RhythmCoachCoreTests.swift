@@ -137,6 +137,20 @@ final class RhythmCoachCoreTests: XCTestCase {
         XCTAssertEqual(result?.bpm ?? 0, 126, accuracy: 2, "own-file analysis should nail the tempo")
     }
 
+    func testAssetStructureAnalysisYieldsLearnedMap() throws {
+        let fixture = SyntheticFixtures.clickTrack(name: "structure", bpm: 128, durationSeconds: 60,
+                                                   energyJumpAt: 30)
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("asset-structure.wav")
+        try WAVFile.write(fixture.buffer, to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let result = try AssetTempoAnalyzer.structureSync(url: url)
+        XCTAssertNotNil(result)
+        let map = SectionCapture().capture(trackKey: "structure", streamed: result!)
+        XCTAssertEqual(map.bpm, 128, accuracy: 2)
+        XCTAssertGreaterThan(map.sections.count, 1, "file analysis should find the section change")
+    }
+
     // MARK: Calibration (streamed) capture → generator
 
     func testStreamedCaptureProducesValidRoutine() {

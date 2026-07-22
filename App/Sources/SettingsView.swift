@@ -4,8 +4,7 @@ import RhythmCoachCore
 /// App settings, off the home screen (gear in the toolbar): tempo-data key override + about info.
 struct SettingsView: View {
     @AppStorage(AppServices.apiKeyDefaultsKey) private var apiKey = ""
-    @AppStorage(AppServices.effortDefaultsKey) private var effort = "medium"
-    @AppStorage(AppServices.skillDefaultsKey) private var skill = 2
+    @AppStorage(ClassDifficulty.defaultsKey) private var difficultyRaw = ClassDifficulty.medium.rawValue
     @AppStorage(HealthLogger.defaultsKey) private var healthLogging = false
     @AppStorage(PictogramStyle.defaultsKey) private var bikeStyleRaw = PictogramStyle.spin.rawValue
     @AppStorage(VoiceCoach.defaultsKey) private var voiceCues = false
@@ -13,17 +12,10 @@ struct SettingsView: View {
     var body: some View {
         List {
             Section {
-                Picker("Effort", selection: $effort) {
-                    Text("Easy").tag("easy")
-                    Text("Medium").tag("medium")
-                    Text("Hard").tag("hard")
-                }
-                .pickerStyle(.segmented)
-                Picker("Skill level", selection: $skill) {
-                    Text("1 · New").tag(1)
-                    Text("2 · Regular").tag(2)
-                    Text("3 · Advanced").tag(3)
-                }
+                DifficultyDial(difficulty: Binding(
+                    get: { ClassDifficulty(rawValue: difficultyRaw) ?? .medium },
+                    set: { difficultyRaw = $0.rawValue }
+                ))
                 Picker("Figure style", selection: $bikeStyleRaw) {
                     ForEach(PictogramStyle.allCases) { style in
                         Text(style.label).tag(style.rawValue)
@@ -33,7 +25,7 @@ struct SettingsView: View {
             } header: {
                 Text("Ride")
             } footer: {
-                Text("Effort biases how hard the choreography pushes; skill gates the advanced moves (corners unlock at 3). Applies to your next ride.")
+                Text("Your default difficulty — one dial drives both effort and which moves unlock (Super Hard opens the full vocabulary). Every class setup can override it.")
             }
 
             #if canImport(HealthKit)

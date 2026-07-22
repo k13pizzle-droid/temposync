@@ -25,9 +25,11 @@ public struct Section: Sendable, Hashable, Codable {
 public struct IntensityDial: Sendable, Hashable, Codable {
     public let value: Double   // clamped to 0...1
     public init(_ value: Double) { self.value = min(max(value, 0), 1) }
-    public static let easy = IntensityDial(0.15)
+    public static let superEasy = IntensityDial(0.0)
+    public static let easy = IntensityDial(0.25)
     public static let medium = IntensityDial(0.5)
-    public static let hard = IntensityDial(0.85)
+    public static let hard = IntensityDial(0.75)
+    public static let superHard = IntensityDial(1.0)
 }
 
 /// Everything the generator needs to produce a routine. Deterministic in `(trackKey, seed)`.

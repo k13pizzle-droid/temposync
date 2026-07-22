@@ -75,7 +75,7 @@ public final class StreamingAnalyzer {
 
     // MARK: Finalize
 
-    public struct Result {
+    public struct Result: Sendable {
         public let analysis: BeatAnalysis
         public let energy: [Double]
         public let energyFrameRate: Double

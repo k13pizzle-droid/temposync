@@ -247,7 +247,8 @@ public struct RoutineGenerator {
         let cappedMax = IntensityTier(rawValue: min(maxTier.rawValue, roleCap.rawValue)) ?? maxTier
 
         let baseline = baselineTier(for: anchorType).rawValue
-        let shift = Int((request.intensity.value - 0.5) * 3.0)
+        // 5-step dial: 0→-2, 0.25→-1, 0.5→0, 0.75→+1, 1.0→+2 tiers around the section baseline.
+        let shift = Int(((request.intensity.value - 0.5) * 4.0).rounded())
         let target = min(max(baseline + shift, 0), cappedMax.rawValue)
 
         // Upper-body moves are NEVER section primaries — a whole section of press-downs would blow

@@ -23,6 +23,48 @@ public enum AssetTempoAnalyzer {
         }.value
     }
 
+    /// FULL-song analysis: the complete streamed result (tempo + beat grid + section boundaries +
+    /// energy curve) from the track's own audio — everything a learned SectionMap needs, with no
+    /// microphone and no network. This makes the calibration ride necessary only for streamed-only
+    /// tracks. Runs off the main actor; a 4-minute song takes a few seconds.
+    public static func analyzeStructure(url: URL) async throws -> StreamingAnalyzer.Result? {
+        try await Task.detached(priority: .utility) {
+            try structureSync(url: url)
+        }.value
+    }
+
+    static func structureSync(url: URL) throws -> StreamingAnalyzer.Result? {
+        let file = try AVAudioFile(forReading: url)
+        let format = file.processingFormat
+        let sampleRate = format.sampleRate
+        let channels = Int(format.channelCount)
+        guard sampleRate > 0, channels > 0 else { return nil }
+
+        let analyzer = StreamingAnalyzer(sampleRate: sampleRate)
+        let chunk: AVAudioFrameCount = 32_768
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: chunk) else { return nil }
+
+        while file.framePosition < file.length {
+            try file.read(into: buffer, frameCount: chunk)
+            let frames = Int(buffer.frameLength)
+            guard frames > 0, let channelData = buffer.floatChannelData else { break }
+            var mono = [Float](repeating: 0, count: frames)
+            for channel in 0..<channels {
+                let data = channelData[channel]
+                for i in 0..<frames { mono[i] += data[i] }
+            }
+            if channels > 1 {
+                let scale = 1.0 / Float(channels)
+                for i in 0..<frames { mono[i] *= scale }
+            }
+            analyzer.feed(mono)
+        }
+
+        let result = analyzer.finalize()
+        guard result.analysis.tempo.bpm > 60 else { return nil }
+        return result
+    }
+
     static func analyzeSync(url: URL, secondsLimit: Double) throws -> Result? {
         let file = try AVAudioFile(forReading: url)
         let format = file.processingFormat

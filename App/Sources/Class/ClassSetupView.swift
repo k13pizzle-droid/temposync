@@ -23,6 +23,7 @@ struct ClassSetupView: View {
     @State private var showingSave = false
     @State private var saveName = ""
     @State private var savedToast: String?
+    @State private var difficulty: ClassDifficulty = AppServices.difficulty
 
     /// The plan with any manual role overrides applied — what actually rides.
     private var effectivePlan: ClassPlan? {
@@ -83,6 +84,8 @@ struct ClassSetupView: View {
                 }
             }
             .pickerStyle(.segmented)
+            DifficultyDial(difficulty: $difficulty)
+                .onChange(of: difficulty) { AppServices.difficultyOverride = difficulty }
             Toggle("Reorder songs to fit the class arc", isOn: $reorder)
             Button {
                 showingSongPicker = true
@@ -283,6 +286,7 @@ struct ClassSetupView: View {
     }
 
     private func startClass(_ plan: ClassPlan) {
+        AppServices.difficultyOverride = difficulty
         AppServices.activeClassPlan = plan
         provider?.startPlayback(trackKeys: plan.songs.map { $0.song.trackKey })
         rideStarted = true

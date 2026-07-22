@@ -39,7 +39,7 @@ struct AnalyzeLibraryView: View {
                     }
                 }
             } footer: {
-                Text("Analysis reads each song's own audio on-device (about 2–4 s per track). Nothing leaves your phone. Streamed-only tracks have no readable audio — they resolve over the network or via a calibration ride.")
+                Text("Analysis reads each song's own audio on-device (a few seconds per track) and learns BOTH its BPM and its real structure — drops, choruses, builds — so rides get hard countdowns with true timing. Nothing leaves your phone. Streamed-only tracks have no readable audio — they resolve over the network or via a calibration ride.")
             }
         }
         .navigationTitle("Analyze library")
@@ -90,8 +90,8 @@ final class AnalyzeLibraryViewModel: ObservableObject {
                 currentTitle = "\(song.title) — \(song.artist)"
                 if waterfall.resolveLocally(title: song.title, artist: song.artist) != nil {
                     alreadyCached += 1
-                } else if await AppServices.onDeviceBPM(trackKey: song.trackKey, title: song.title,
-                                                        artist: song.artist) != nil {
+                } else if await AppServices.onDeviceLearn(trackKey: song.trackKey, title: song.title,
+                                                          artist: song.artist) != nil {
                     analyzed += 1
                 } else {
                     streamOnly += 1

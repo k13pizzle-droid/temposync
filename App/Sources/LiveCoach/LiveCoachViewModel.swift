@@ -293,18 +293,22 @@ final class LiveCoachViewModel: ObservableObject {
         buildModeHRoutine(info: info, map: learnedMap, bpm: learnedMap?.bpm ?? local?.bpm,
                           bpmKnown: learnedMap != nil || local != nil)
 
-        // No local answer → in-house analysis of the track's own audio first (no network), then
-        // the API rungs for streamed-only tracks. Either result is cached for good.
-        if learnedMap == nil, local == nil, let waterfall {
+        // No learned map yet → FULL in-house learn from the track's own audio (BPM + real section
+        // timing, no mic, no network); network BPM rungs only for streamed-only tracks.
+        if learnedMap == nil, let waterfall {
             let trackKey = info.trackKey
             Task { @MainActor in
-                var bpm = await AppServices.onDeviceBPM(trackKey: trackKey, title: info.title,
-                                                        artist: info.artist)
-                if bpm == nil {
-                    bpm = await waterfall.resolve(title: info.title, artist: info.artist)?.bpm
+                if await AppServices.onDeviceLearn(trackKey: trackKey, title: info.title,
+                                                   artist: info.artist) != nil {
+                    // Re-run configuration: the learned map is now in the store, so the ride
+                    // rebuilds with real chorus timing and hard countdowns.
+                    guard self.currentTrackKey == trackKey else { return }
+                    self.configureModeH(for: info)
+                } else if local == nil {
+                    guard let bpm = await waterfall.resolve(title: info.title, artist: info.artist)?.bpm,
+                          self.currentTrackKey == trackKey else { return }
+                    self.buildModeHRoutine(info: info, map: nil, bpm: bpm, bpmKnown: true)
                 }
-                guard let bpm, self.currentTrackKey == trackKey else { return }
-                self.buildModeHRoutine(info: info, map: nil, bpm: bpm, bpmKnown: true)
             }
         }
     }
@@ -475,6 +479,7 @@ final class LiveCoachViewModel: ObservableObject {
         sessionStart = nil
         songsSeen = 0
         AppServices.activeClassPlan = nil
+        AppServices.difficultyOverride = nil
 
         isRunning = false
         watchTask?.cancel(); watchTask = nil
