@@ -23,6 +23,11 @@ public struct PlannedSong: Sendable, Equatable, Identifiable {
     public var id: String { song.trackKey }
     public let song: ClassSong
     public let role: SongRole
+
+    public init(song: ClassSong, role: SongRole) {
+        self.song = song
+        self.role = role
+    }
 }
 
 public enum ClassFormat: Int, Sendable, CaseIterable, Identifiable {
@@ -35,6 +40,12 @@ public struct ClassPlan: Sendable, Equatable {
     public let format: ClassFormat
     public let songs: [PlannedSong]
     public let reordered: Bool
+
+    public init(format: ClassFormat, songs: [PlannedSong], reordered: Bool) {
+        self.format = format
+        self.songs = songs
+        self.reordered = reordered
+    }
 
     public var totalSeconds: Double { songs.reduce(0) { $0 + $1.song.durationSeconds } }
 

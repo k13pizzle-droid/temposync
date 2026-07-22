@@ -12,7 +12,18 @@ struct ClassSetupView: View {
     @State private var format: ClassFormat = .thirty
     @State private var reorder = true
     @State private var plan: ClassPlan?
+    @State private var roleOverrides: [String: SongRole] = [:]
     @State private var rideStarted = false
+
+    /// The plan with any manual role overrides applied — what actually rides.
+    private var effectivePlan: ClassPlan? {
+        guard let plan else { return nil }
+        guard !roleOverrides.isEmpty else { return plan }
+        let adjusted = plan.songs.map { planned in
+            roleOverrides[planned.song.trackKey].map { PlannedSong(song: planned.song, role: $0) } ?? planned
+        }
+        return ClassPlan(format: plan.format, songs: adjusted, reordered: plan.reordered)
+    }
 
     var body: some View {
         List {
@@ -71,7 +82,7 @@ struct ClassSetupView: View {
 
     @ViewBuilder
     private var planSection: some View {
-        if let plan {
+        if let plan = effectivePlan {
             Section {
                 ForEach(Array(plan.songs.enumerated()), id: \.element.id) { index, planned in
                     HStack(spacing: 12) {
@@ -95,6 +106,28 @@ struct ClassSetupView: View {
                             Label("Remove", systemImage: "minus.circle")
                         }
                     }
+                    // Long-press to override this song's role in the arc.
+                    .contextMenu {
+                        Picker("Role", selection: Binding(
+                            get: { roleOverrides[planned.song.trackKey] ?? planned.role },
+                            set: { roleOverrides[planned.song.trackKey] = $0 }
+                        )) {
+                            ForEach(SongRole.allCases, id: \.self) { role in
+                                Text(role.rawValue.capitalized).tag(role)
+                            }
+                        }
+                        if roleOverrides[planned.song.trackKey] != nil {
+                            Button("Reset to auto") {
+                                roleOverrides.removeValue(forKey: planned.song.trackKey)
+                            }
+                        }
+                    }
+                }
+
+                NavigationLink {
+                    RideStoryboardView(plan: plan)
+                } label: {
+                    Label("Preview the whole ride", systemImage: "list.bullet.rectangle")
                 }
                 Button {
                     startClass(plan)
