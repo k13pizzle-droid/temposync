@@ -440,6 +440,25 @@ final class RhythmCoachCoreTests: XCTestCase {
         try SectionMapStore.upsert(better, in: ctx)
         XCTAssertEqual(try SectionMapStore.map(for: "k", in: ctx)?.captureQuality, 0.9)
     }
+
+    // MARK: LiveCoach — section label clamps past the end
+
+    func testSectionLabelClampsToLastSectionPastTheEnd() {
+        // The old fallback latched the FIRST section for counts beyond every section's end, so an
+        // outro overrun displayed "INTRO" on the live header. It must clamp to the last section.
+        let req = SampleSongs.edmAnthem()
+        let routine = RoutineGenerator().generate(req)
+        let coach = LiveCoach(routine: routine, clock: BeatClock(bpm: req.bpm, beatOffset: 0),
+                              sections: req.sections, confidence: .learned)
+        let lastSection = req.sections.max(by: { $0.startCount < $1.startCount })!
+        let maxEnd = req.sections.map(\.endCount).max()!
+        let wayPast = Double(maxEnd + 64) * 60.0 / req.bpm
+        XCTAssertEqual(coach.frame(at: wayPast).sectionType, lastSection.type)
+        // Still exact inside a section: the first section's own range reports itself.
+        let first = req.sections.min(by: { $0.startCount < $1.startCount })!
+        let inFirst = (Double(first.startCount) + 1) * 60.0 / req.bpm
+        XCTAssertEqual(coach.frame(at: inFirst).sectionType, first.type)
+    }
 }
 
 // Helper: routine coverage in seconds for scanning tests.

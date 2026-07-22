@@ -352,13 +352,17 @@ public struct RoutineGenerator {
     ) -> MoveEvent {
         var cues: [Cue] = []
 
-        // Resistance floor: transition low→high before any resistance-requiring move.
+        // Resistance floor: transition low→high before any resistance-requiring move; ease back off
+        // when the ride settles into easy seated work. The down-cue used to key on `.recovery`-tier
+        // moves, but no library move has carried that tier since Recovery Spin merged into Seated
+        // Flat — so riders were told to add resistance and never to take it off. Easy here means:
+        // no resistance required and at or below the moderate tier (base saddle work).
         if move.needsResistance {
             if !resistanceUp {
                 cues.append(Cue(type: .resistanceUp, atCount: startCount, text: "Add resistance"))
                 resistanceUp = true
             }
-        } else if move.intensityTier == .recovery && resistanceUp {
+        } else if move.intensityTier <= .moderate && resistanceUp {
             cues.append(Cue(type: .resistanceDown, atCount: startCount, text: "Ease the resistance"))
             resistanceUp = false
         }

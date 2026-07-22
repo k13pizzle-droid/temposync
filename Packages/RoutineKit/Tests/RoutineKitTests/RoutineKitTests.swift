@@ -164,6 +164,37 @@ final class RoutineKitTests: XCTestCase {
         XCTAssertEqual(signatures.count, 1, "chorus signature should recur, got \(signatures.sorted())")
     }
 
+    // MARK: Resistance eases off (round-9 regression)
+
+    func testResistanceEasesOffAfterDemandingWork() {
+        // The down-cue used to key on the `.recovery` tier, which no move has carried since
+        // Recovery Spin merged into Seated Flat — resistance went up and never came down, and the
+        // fuzz sweep can't see it (the floor rule never fires on a stuck-high state). Ease-off
+        // must fire when easy seated work follows resistance-requiring blocks.
+        var sawDown = false
+        for seed in UInt64(1)...30 {
+            let request = SampleSongs.edmAnthem(seed: seed)
+            let routine = gen.generate(request)
+            var up = false
+            for event in routine.events {
+                for cue in event.cues {
+                    if cue.type == .resistanceUp {
+                        XCTAssertFalse(up, "seed \(seed): up-cue while already up at \(cue.atCount)")
+                        up = true
+                    }
+                    if cue.type == .resistanceDown {
+                        XCTAssertTrue(up, "seed \(seed): down-cue while already down at \(cue.atCount)")
+                        up = false
+                        sawDown = true
+                    }
+                }
+            }
+            // The floor rule must still hold with the down-cue back in play.
+            XCTAssertEqual(Grammar.checkResistanceFloor(routine.events), [], "seed \(seed)")
+        }
+        XCTAssertTrue(sawDown, "no resistanceDown cue across 30 seeds — the ease-off path is dead again")
+    }
+
     // MARK: Fuzz — grammar holds across the settings space
 
     func testGrammarHoldsUnderFuzz() {

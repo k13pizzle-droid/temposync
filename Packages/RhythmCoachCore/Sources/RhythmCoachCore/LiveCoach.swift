@@ -48,6 +48,8 @@ public struct LiveCoach: Sendable {
     public let confidence: MapConfidence
 
     private let player: RoutinePlayer
+    /// Sorted once here — `frame(at:)` runs at display refresh rate and must not sort per call.
+    private let sortedSections: [Section]
 
     public init(routine: Routine, clock: BeatClock, sections: [Section], confidence: MapConfidence) {
         self.routine = routine
@@ -55,6 +57,7 @@ public struct LiveCoach: Sendable {
         self.sections = sections
         self.confidence = confidence
         self.player = RoutinePlayer(routine: routine)
+        self.sortedSections = sections.sorted { $0.startCount < $1.startCount }
     }
 
     public func frame(at time: Double) -> LiveFrame {
@@ -66,9 +69,8 @@ public struct LiveCoach: Sendable {
 
         // Countdown text: prior maps never show hard numbers (spec §B3), so gate on confidence too.
         var countdownText: String? = nil
-        if confidence == .learned, let cd = state.activeCountdown, let until = state.countsUntilNext {
+        if confidence == .learned, state.activeCountdown != nil, let until = state.countsUntilNext {
             let moveName = state.nextEvent?.move.name.uppercased() ?? "NEXT"
-            _ = cd
             countdownText = "\(moveName) in \(until)"
         }
 
@@ -94,11 +96,14 @@ public struct LiveCoach: Sendable {
         )
     }
 
+    /// The section covering `count`, clamped to the nearest previous section when the clock runs
+    /// past the last mapped one (the old fallback latched the FIRST section, so an outro overrun
+    /// displayed "INTRO" on the live header).
     private func sectionType(covering count: Int) -> SectionType? {
         var result: SectionType? = nil
-        for s in sections.sorted(by: { $0.startCount < $1.startCount }) where s.startCount <= count {
-            if count < s.endCount { result = s.type }
-            else if result == nil { result = s.type }
+        for s in sortedSections where s.startCount <= count {
+            result = s.type
+            if count < s.endCount { break }
         }
         return result
     }

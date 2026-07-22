@@ -118,6 +118,30 @@ for seed in UInt64(0)..<120 {
 print("     ran \(fuzzRuns) generations")
 r.check("grammar holds across full fuzz sweep", fuzzViolations)
 
+// Resistance eases off (round-9 regression): the down-cue must actually fire — it used to key on
+// the .recovery tier, which no library move carries anymore, leaving resistance stuck high forever.
+var resistanceProblems: [String] = []
+var downCues = 0
+for seed in UInt64(1)...30 {
+    let rt = gen.generate(SampleSongs.edmAnthem(seed: seed))
+    var up = false
+    for e in rt.events {
+        for cue in e.cues {
+            if cue.type == .resistanceUp {
+                if up { resistanceProblems.append("seed \(seed): double up-cue at \(cue.atCount)") }
+                up = true
+            }
+            if cue.type == .resistanceDown {
+                if !up { resistanceProblems.append("seed \(seed): down-cue while down at \(cue.atCount)") }
+                up = false
+                downCues += 1
+            }
+        }
+    }
+}
+if downCues == 0 { resistanceProblems.append("no resistanceDown cue across 30 seeds — ease-off path is dead") }
+r.check("resistance eases off after demanding work (\(downCues) down-cues/30 seeds)", resistanceProblems)
+
 // Storyboard: the ride as the rider experiences it (consecutive same-move events merged).
 print("\nRide storyboard (seed 42, hard, learned — 128 BPM, counts → ≈seconds):")
 var blocks: [(name: String, start: Int, counts: Int)] = []
