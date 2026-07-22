@@ -7,6 +7,7 @@ struct SettingsView: View {
     @AppStorage(ClassDifficulty.defaultsKey) private var difficultyRaw = ClassDifficulty.medium.rawValue
     @AppStorage(HealthLogger.defaultsKey) private var healthLogging = false
     @AppStorage(PictogramStyle.defaultsKey) private var bikeStyleRaw = PictogramStyle.spin.rawValue
+    @AppStorage(Theme.accentDefaultsKey) private var accentID = "pulse"
     @AppStorage(VoiceCoach.defaultsKey) private var voiceCues = false
 
     var body: some View {
@@ -22,10 +23,25 @@ struct SettingsView: View {
                     }
                 }
                 Toggle("Voice cues (ducks the music)", isOn: $voiceCues)
+                HStack {
+                    Text("Accent")
+                    Spacer()
+                    ForEach(Theme.accents) { accent in
+                        Button {
+                            accentID = accent.id
+                        } label: {
+                            Circle()
+                                .fill(accent.color)
+                                .frame(width: 26, height: 26)
+                                .overlay(Circle().strokeBorder(.white, lineWidth: accentID == accent.id ? 2 : 0))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
             } header: {
                 Text("Ride")
             } footer: {
-                Text("Your default difficulty — one dial drives both effort and which moves unlock (Super Hard opens the full vocabulary). Every class setup can override it.")
+                Text("Your default difficulty. One dial sets both the effort and which moves unlock; Super Hard opens the full vocabulary. Every class setup can override it.")
             }
 
             #if canImport(HealthKit)
@@ -37,7 +53,7 @@ struct SettingsView: View {
             } header: {
                 Text("Apple Health")
             } footer: {
-                Text("Rides over 2 minutes save as indoor-cycling workouts. Write-only — the app never reads your Health data.")
+                Text("Rides over 2 minutes save as indoor cycling workouts. Write only: the app never reads your Health data.")
             }
             #endif
 
@@ -50,7 +66,7 @@ struct SettingsView: View {
             } footer: {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(apiKey.isEmpty
-                         ? "Built-in key active — nothing to paste. BPM resolves via Deezer, then GetSongBPM; each song is looked up once, then cached."
+                         ? "Built-in key active, nothing to paste. BPM resolves via Deezer, then GetSongBPM; each song is looked up once, then cached."
                          : "Using your override key instead of the built-in one.")
                     Link("Tempo data by GetSongBPM", destination: URL(string: "https://getsongbpm.com")!)
                 }
@@ -63,7 +79,7 @@ struct SettingsView: View {
                     Label("Analyze my library", systemImage: "waveform.badge.magnifyingglass")
                 }
             } footer: {
-                Text("One pass measures every downloaded song's BPM from its own audio — class building becomes instant and offline.")
+                Text("One pass measures every downloaded song from its own audio, so class building becomes instant and offline.")
             }
 
             Section {

@@ -10,6 +10,8 @@ struct RootView: View {
     @StateObject private var summaries = SummaryCenter.shared
     @State private var lastSavedClass: SavedClassRecord?
     @State private var lastRide: RideLogRecord?
+    @State private var ridesThisWeek = 0
+    @State private var streakWeeks = 0
     @State private var rideAgainStarted = false
     @AppStorage(OnboardingView.defaultsKey) private var onboarded = false
     @State private var showOnboarding = false
@@ -64,7 +66,7 @@ struct RootView: View {
                     } label: {
                         wideCard(
                             title: "Calibrate a playlist",
-                            subtitle: "One out-loud listen → real chorus timing forever",
+                            subtitle: "Listen once out loud, keep the timing for good",
                             icon: "waveform.badge.mic",
                             colors: [.green, .teal]
                         )
@@ -82,6 +84,25 @@ struct RootView: View {
                         } label: {
                             listChip(title: "Ride history", icon: "clock.arrow.circlepath")
                         }
+                    }
+
+                    // Weekly progress and streak.
+                    if ridesThisWeek > 0 || streakWeeks > 0 {
+                        HStack(spacing: 12) {
+                            Image(systemName: "flame.fill").foregroundStyle(.orange)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("This week: \(ridesThisWeek) of 3 rides").font(Theme.bold(14))
+                                ProgressView(value: Double(min(ridesThisWeek, 3)), total: 3)
+                                    .tint(.orange)
+                            }
+                            if streakWeeks > 1 {
+                                Spacer()
+                                Text("\(streakWeeks)-week streak")
+                                    .font(Theme.bold(12)).foregroundStyle(.orange)
+                            }
+                        }
+                        .padding(14)
+                        .background(.white.opacity(0.06), in: RoundedRectangle(cornerRadius: 14))
                     }
 
                     // Footprint.
@@ -124,8 +145,8 @@ struct RootView: View {
     private func heroCard(title: String, subtitle: String, icon: String, colors: [Color]) -> some View {
         HStack {
             VStack(alignment: .leading, spacing: 6) {
-                Text(title).font(.title.bold())
-                Text(subtitle).font(.subheadline).opacity(0.85)
+                Text(title).font(Theme.black(27))
+                Text(subtitle).font(Theme.regular(14)).opacity(0.85)
             }
             Spacer()
             Image(systemName: icon).font(.system(size: 44))
@@ -141,8 +162,8 @@ struct RootView: View {
         HStack(spacing: 14) {
             Image(systemName: icon).font(.title)
             VStack(alignment: .leading, spacing: 3) {
-                Text(title).font(.headline).lineLimit(1)
-                Text(subtitle).font(.caption).opacity(0.85)
+                Text(title).font(Theme.bold(16)).lineLimit(1)
+                Text(subtitle).font(Theme.regular(12)).opacity(0.85)
             }
             Spacer()
             Image(systemName: "chevron.right").font(.footnote).opacity(0.6)
@@ -158,7 +179,7 @@ struct RootView: View {
     private func smallCard(title: String, icon: String, colors: [Color]) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Image(systemName: icon).font(.title2)
-            Text(title).font(.subheadline.bold()).multilineTextAlignment(.leading)
+            Text(title).font(Theme.bold(14)).multilineTextAlignment(.leading)
         }
         .foregroundStyle(.white)
         .padding(16)
@@ -171,7 +192,7 @@ struct RootView: View {
     private func listChip(title: String, icon: String) -> some View {
         HStack(spacing: 8) {
             Image(systemName: icon).font(.subheadline)
-            Text(title).font(.subheadline.bold())
+            Text(title).font(Theme.bold(14))
         }
         .foregroundStyle(.white.opacity(0.9))
         .padding(.vertical, 12)
@@ -187,10 +208,22 @@ struct RootView: View {
         savedDescriptor.fetchLimit = 1
         lastSavedClass = try? AppServices.context.fetch(savedDescriptor).first
 
-        var rideDescriptor = FetchDescriptor<RideLogRecord>(
+        let rideDescriptor = FetchDescriptor<RideLogRecord>(
             sortBy: [SortDescriptor(\.startedAt, order: .reverse)])
-        rideDescriptor.fetchLimit = 1
-        lastRide = try? AppServices.context.fetch(rideDescriptor).first
+        let rides = (try? AppServices.context.fetch(rideDescriptor)) ?? []
+        lastRide = rides.first
+
+        // Weekly count plus consecutive-week streak.
+        let calendar = Calendar.current
+        let now = Date.now
+        ridesThisWeek = rides.filter { calendar.isDate($0.startedAt, equalTo: now, toGranularity: .weekOfYear) }.count
+        var streak = 0
+        var reference = now
+        while rides.contains(where: { calendar.isDate($0.startedAt, equalTo: reference, toGranularity: .weekOfYear) }) {
+            streak += 1
+            reference = calendar.date(byAdding: .weekOfYear, value: -1, to: reference) ?? reference
+        }
+        streakWeeks = streak
     }
 
     private func startSaved(_ record: SavedClassRecord) {

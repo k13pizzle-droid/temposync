@@ -49,6 +49,21 @@ enum AppServices {
         return bpm
     }
 
+    /// True when a learned SectionMap exists for the track (real chorus timing available).
+    static func hasLearnedMap(_ trackKey: String) -> Bool {
+        (try? SectionMapStore.map(for: trackKey, in: context)) != nil
+    }
+
+    /// Duration-weighted mean energy from a learned map; nil when the track has no map.
+    static func learnedEnergy(_ trackKey: String) -> Double? {
+        guard let map = try? SectionMapStore.map(for: trackKey, in: context), !map.sections.isEmpty
+        else { return nil }
+        let totalCounts = map.sections.reduce(0) { $0 + $1.counts }
+        guard totalCounts > 0 else { return nil }
+        let weighted = map.sections.reduce(0.0) { $0 + $1.energy * Double($1.counts) }
+        return weighted / Double(totalCounts)
+    }
+
     /// The class currently being ridden (nil = freestyle). Set by ClassSetupView on start; the live
     /// view model reads per-track roles from it and clears it when the session ends.
     static var activeClassPlan: ClassPlan?

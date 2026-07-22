@@ -26,7 +26,7 @@ struct RideSummaryView: View {
     var body: some View {
         VStack(spacing: 24) {
             VStack(spacing: 4) {
-                Text("Ride complete").font(.title2.bold())
+                Text("Ride complete").font(Theme.black(24))
                 Text(summary.date, style: .date).font(.subheadline).foregroundStyle(.secondary)
                 if let format = summary.formatMinutes {
                     Text("\(format)-minute class").font(.subheadline).foregroundStyle(.secondary)
@@ -43,7 +43,7 @@ struct RideSummaryView: View {
 
             if !summary.moves.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("MOVES RIDDEN").font(.caption2.bold()).foregroundStyle(.secondary)
+                    Text("MOVES RIDDEN").font(Theme.bold(11)).foregroundStyle(.secondary)
                     Text(summary.moves.joined(separator: " · "))
                         .font(.footnote)
                         .fixedSize(horizontal: false, vertical: true)
@@ -73,7 +73,7 @@ struct RideSummaryView: View {
 
     private func stat(_ value: String, _ label: String) -> some View {
         VStack(spacing: 2) {
-            Text(value).font(.system(.title, design: .rounded).weight(.heavy)).monospacedDigit()
+            Text(value).font(Theme.black(28)).monospacedDigit()
             Text(label).font(.caption).foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)

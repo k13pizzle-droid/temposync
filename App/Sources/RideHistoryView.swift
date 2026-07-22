@@ -9,7 +9,7 @@ struct RideHistoryView: View {
     var body: some View {
         List {
             if rides.isEmpty {
-                Text("No rides yet — history appears after your first ride over 2 minutes.")
+                Text("No rides yet. History appears after your first ride over 2 minutes.")
                     .foregroundStyle(.secondary)
             }
             ForEach(rides, id: \.startedAt) { ride in

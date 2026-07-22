@@ -24,6 +24,8 @@ struct ClassSetupView: View {
     @State private var saveName = ""
     @State private var savedToast: String?
     @State private var difficulty: ClassDifficulty = AppServices.difficulty
+    @State private var style: ClassStyle = .standard
+    @State private var learnedKeys: Set<String> = []
 
     /// The plan with any manual role overrides applied — what actually rides.
     private var effectivePlan: ClassPlan? {
@@ -55,7 +57,7 @@ struct ClassSetupView: View {
     private var playlistSection: some View {
         Section("Playlist") {
             if playlists.isEmpty {
-                Text("No playlists found — build one in the Music app first.")
+                Text("No playlists found. Build one in the Music app first.")
                     .foregroundStyle(.secondary)
             }
             ForEach(playlists) { playlist in
@@ -76,8 +78,36 @@ struct ClassSetupView: View {
         }
     }
 
+    private static let templates: [(name: String, icon: String, style: ClassStyle, difficulty: ClassDifficulty)] = [
+        ("Classic", "figure.indoor.cycle", .standard, .medium),
+        ("Intervals", "bolt.fill", .intervals, .difficult),
+        ("Climb day", "mountain.2.fill", .climbs, .difficult),
+        ("Recovery", "wind", .recovery, .superEasy),
+    ]
+
     private var formatSection: some View {
         Section("Class") {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(Self.templates, id: \.name) { template in
+                        Button {
+                            style = template.style
+                            difficulty = template.difficulty
+                            AppServices.difficultyOverride = template.difficulty
+                            rebuildPlan()
+                        } label: {
+                            Label(template.name, systemImage: template.icon)
+                                .font(Theme.bold(13))
+                                .padding(.horizontal, 12).padding(.vertical, 8)
+                                .background(style == template.style ? Color.accentColor.opacity(0.25)
+                                            : Color.white.opacity(0.08),
+                                            in: Capsule())
+                                .foregroundStyle(style == template.style ? Color.accentColor : .primary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
             Picker("Length", selection: $format) {
                 ForEach(ClassFormat.allCases) { f in
                     Text("\(f.minutes) min").tag(f)
@@ -117,6 +147,10 @@ struct ClassSetupView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(planned.song.title).lineLimit(1)
                             Text(planned.song.artist).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                        if learnedKeys.contains(planned.song.trackKey) {
+                            Image(systemName: "waveform.badge.checkmark")
+                                .font(.system(size: 11)).foregroundStyle(.green)
                         }
                         Spacer()
                         Text(planned.song.bpm.map { "\(Int($0))" } ?? "—")
@@ -185,8 +219,8 @@ struct ClassSetupView: View {
                 }
             } footer: {
                 Text(plan.reordered
-                     ? "Songs reordered to fit the arc — climbs get the slow songs, the anthem takes the final sprint."
-                     : "Playlist order respected — roles adapt to your order.")
+                     ? "Songs reordered to fit the arc. Climbs get the slow songs; the anthem takes the final sprint."
+                     : "Playlist order respected. Roles adapt to your order.")
             }
         }
     }
@@ -261,9 +295,15 @@ struct ClassSetupView: View {
     private var includedSongs: [ClassSong] { songs.filter { includedKeys.contains($0.trackKey) } }
 
     private func rebuildPlan() {
-        let pool = includedSongs
+        // Enrich with learned data: measured energy sharpens role fitting; badges show coverage.
+        learnedKeys = Set(songs.map { $0.trackKey }.filter { AppServices.hasLearnedMap($0) })
+        let pool = includedSongs.map { song in
+            ClassSong(trackKey: song.trackKey, title: song.title, artist: song.artist,
+                      durationSeconds: song.durationSeconds, bpm: song.bpm,
+                      energy: AppServices.learnedEnergy(song.trackKey))
+        }
         guard pool.count >= 2 else { plan = nil; return }
-        plan = ClassPlanner().plan(songs: pool, format: format, reorder: reorder)
+        plan = ClassPlanner().plan(songs: pool, format: format, reorder: reorder, style: style)
     }
 
     /// Swipe-remove: excluded for this class only (the playlist itself is untouched).

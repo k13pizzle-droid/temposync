@@ -2,6 +2,10 @@ import SwiftUI
 
 @main
 struct TempoSyncApp: App {
+    @AppStorage(Theme.accentDefaultsKey) private var accentID = "pulse"
+
+    init() { Theme.installNavigationFonts() }
+
     /// Launch hooks for automated screenshots / smoke launches (no one to tap through):
     /// TEMPOSYNC_DEMO=1 → straight into the Demo Ride; TEMPOSYNC_MODEH=1 → straight into Mode H.
     private let launchDemo = ProcessInfo.processInfo.environment["TEMPOSYNC_DEMO"] == "1"
@@ -11,17 +15,21 @@ struct TempoSyncApp: App {
 
     var body: some Scene {
         WindowGroup {
-            if launchDemo {
-                LiveCoachView { $0.startDemo() }
-            } else if launchModeH {
-                ModeHLaunchView()
-            } else if launchClass {
-                NavigationStack { ClassSetupView() }
-            } else if launchCal {
-                NavigationStack { CalibrationView() }
-            } else {
-                RootView()
+            Group {
+                if launchDemo {
+                    LiveCoachView { $0.startDemo() }
+                } else if launchModeH {
+                    ModeHLaunchView()
+                } else if launchClass {
+                    NavigationStack { ClassSetupView() }
+                } else if launchCal {
+                    NavigationStack { CalibrationView() }
+                } else {
+                    RootView()
+                }
             }
+            .environment(\.font, Theme.body)
+            .tint(Theme.accents.first(where: { $0.id == accentID })?.color ?? Theme.accents[0].color)
         }
     }
 }

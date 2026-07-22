@@ -261,6 +261,31 @@ final class RhythmCoachCoreTests: XCTestCase {
         XCTAssertEqual(plan.songs.last?.role, .cooldown)
     }
 
+    func testClassStylesReshapeArc() {
+        let planner = ClassPlanner()
+        let intervals = planner.arc(count: 10, style: .intervals)
+        XCTAssertGreaterThanOrEqual(intervals.filter { $0 == .sprint }.count, 3,
+                                    "intervals style should be sprint heavy")
+        let climbs = planner.arc(count: 10, style: .climbs)
+        XCTAssertEqual(climbs[climbs.count - 2], .climb, "climb style peaks on a climb")
+        let recovery = planner.arc(count: 10, style: .recovery)
+        XCTAssertFalse(recovery.contains(.sprint), "recovery style has no sprints")
+        XCTAssertFalse(recovery.contains(.jumps), "recovery style skips the jumps opener")
+    }
+
+    func testEnergyAwareSprintAssignment() {
+        // Two candidates tied on BPM for the sprint slot; measured energy should break the tie.
+        let songs = [
+            ClassSong(trackKey: "calm", title: "Calm", artist: "x", durationSeconds: 210, bpm: 127, energy: 0.3),
+            ClassSong(trackKey: "anthem", title: "Anthem", artist: "x", durationSeconds: 210, bpm: 127, energy: 0.95),
+            ClassSong(trackKey: "warm", title: "Warm", artist: "x", durationSeconds: 210, bpm: 95, energy: 0.2),
+            ClassSong(trackKey: "cool", title: "Cool", artist: "x", durationSeconds: 210, bpm: 88, energy: 0.2),
+        ]
+        let plan = ClassPlanner().plan(songs: songs, format: .fifteen, reorder: true)
+        let sprint = plan.songs.first { $0.role == .sprint }
+        XCTAssertEqual(sprint?.song.trackKey, "anthem", "the high-energy song should take the sprint")
+    }
+
     // MARK: Role steering in the generator
 
     func testRoleSteering() {

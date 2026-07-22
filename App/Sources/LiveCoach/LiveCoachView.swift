@@ -34,6 +34,7 @@ struct LiveCoachView: View {
                     nextMoveBar(frame)
                     phraseDots(frame)
                     resistanceRow(frame)
+                    if vm.canNudgeDifficulty { difficultyNudgeRow }
                     if vm.hasTransport { transportBar }
                     if vm.modeSState != nil { tapTheOneButton }
                 }
@@ -77,7 +78,7 @@ struct LiveCoachView: View {
             if f.bpm > 0 {
                 VStack(alignment: .trailing, spacing: 0) {
                     Text("~\(f.suggestedRPM) RPM")
-                        .font(.title3).bold().monospacedDigit()
+                        .font(Theme.black(19)).monospacedDigit()
                     Text("\(Int(f.bpm)) BPM")
                         .font(.caption2).monospacedDigit()
                         .foregroundStyle(.white.opacity(0.7))
@@ -107,7 +108,7 @@ struct LiveCoachView: View {
                               bikeStyle: PictogramStyle(rawValue: bikeStyleRaw) ?? .spin)
                     .frame(width: 150, height: 150)
                 Text(f.currentMoveName)
-                    .font(.system(size: 26, weight: .heavy, design: .rounded))
+                    .font(Theme.black(26))
                     .multilineTextAlignment(.center)
                 if !f.currentFormCue.isEmpty {
                     Text(f.currentFormCue)
@@ -124,7 +125,7 @@ struct LiveCoachView: View {
         Group {
             if let countdown = f.countdownText {
                 Text(countdown)
-                    .font(.system(size: 32, weight: .black, design: .rounded))
+                    .font(Theme.black(30))
                     .foregroundStyle(.white)
                     .padding(.horizontal, 20).padding(.vertical, 10)
                     .background(.white.opacity(0.15), in: RoundedRectangle(cornerRadius: 16))
@@ -159,6 +160,22 @@ struct LiveCoachView: View {
         .foregroundStyle(f.resistanceUp ? .white : .white.opacity(0.6))
         .padding(.horizontal, 14).padding(.vertical, 8)
         .background(.white.opacity(f.resistanceUp ? 0.2 : 0.08), in: Capsule())
+    }
+
+    /// In-ride difficulty: one tap re-biases the rest of the class.
+    private var difficultyNudgeRow: some View {
+        HStack(spacing: 16) {
+            Button { vm.nudgeDifficulty(-1) } label: {
+                Image(systemName: "minus.circle.fill").font(.title3)
+            }
+            Text(vm.currentDifficultyName)
+                .font(Theme.bold(13))
+                .frame(minWidth: 84)
+            Button { vm.nudgeDifficulty(+1) } label: {
+                Image(systemName: "plus.circle.fill").font(.title3)
+            }
+        }
+        .foregroundStyle(.white.opacity(0.85))
     }
 
     /// Music remote (Mode H): scrubber + previous / −15 s / play-pause / +15 s / next.

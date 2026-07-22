@@ -10,15 +10,15 @@ struct OnboardingView: View {
         TabView {
             page(icon: "figure.indoor.cycle",
                  title: "Your music.\nYour instructor.",
-                 text: "TempoSync turns any playlist into a coached spin class — moves, sprints, and recovery choreographed to every song's beat, right on your handlebars.")
+                 text: "TempoSync turns any playlist into a coached spin class. Moves, sprints, and recovery, choreographed to every song's beat, right on your handlebars.")
             page(icon: "music.note.list",
                  title: "It needs two things",
-                 text: "Access to Apple Music (to see what's playing and queue your class) — and nothing else. All analysis runs on your phone. Nothing is recorded or uploaded, ever.")
+                 text: "Access to Apple Music, to see what's playing and queue your class. That's it. All analysis runs on your phone, and nothing is recorded or uploaded, ever.")
             VStack(spacing: 24) {
                 Image(systemName: "waveform.badge.magnifyingglass")
                     .font(.system(size: 64)).foregroundStyle(.tint)
-                Text("Two power moves").font(.title.bold()).multilineTextAlignment(.center)
-                Text("**Analyze my library** (Settings) measures every downloaded song's BPM from its own audio.\n\n**Calibrate a playlist** listens to one out-loud playthrough and learns each song's real drops and choruses — forever.")
+                Text("Two power moves").font(Theme.black(28)).multilineTextAlignment(.center)
+                Text("**Analyze my library** (Settings) measures every downloaded song from its own audio.\n\n**Calibrate a playlist** listens to one out-loud playthrough and learns each song's real drops and choruses for good.")
                     .multilineTextAlignment(.center).foregroundStyle(.secondary)
                 Button {
                     UserDefaults.standard.set(true, forKey: Self.defaultsKey)
@@ -37,8 +37,8 @@ struct OnboardingView: View {
     private func page(icon: String, title: String, text: String) -> some View {
         VStack(spacing: 24) {
             Image(systemName: icon).font(.system(size: 64)).foregroundStyle(.tint)
-            Text(title).font(.title.bold()).multilineTextAlignment(.center)
-            Text(text).multilineTextAlignment(.center).foregroundStyle(.secondary)
+            Text(title).font(Theme.black(28)).multilineTextAlignment(.center)
+            Text(text).font(Theme.regular(16)).multilineTextAlignment(.center).foregroundStyle(.secondary)
         }
         .padding(32)
     }

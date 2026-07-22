@@ -37,7 +37,7 @@ struct CalibrationView: View {
                 } header: {
                     Text("Playlist")
                 } footer: {
-                    Text("Play through once with the sound OUT LOUD (phone speaker or a speaker nearby). The app listens and learns each song's real structure — drops, choruses, builds. One pass per playlist, stored forever.")
+                    Text("Play through once with the sound out loud, from the phone speaker or a speaker nearby. The app listens and learns each song's real structure: drops, choruses, builds. One pass per playlist, stored for good.")
                 }
 
                 if selectedPlaylist != nil {

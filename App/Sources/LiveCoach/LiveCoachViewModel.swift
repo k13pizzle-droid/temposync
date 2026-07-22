@@ -185,7 +185,7 @@ final class LiveCoachViewModel: ObservableObject {
         if let info = nowPlaying.nowPlaying {
             configureModeH(for: info)
         } else {
-            statusLine = "Nothing playing — start a song in the Music app"
+            statusLine = "Nothing playing. Start a song in the Music app."
         }
 
         // 3 Hz poll: play-state + track-change detection + playback-position anchor smoothing.
@@ -333,7 +333,7 @@ final class LiveCoachViewModel: ObservableObject {
         if map != nil { bpmLabel = "learned map" }
         else if bpmKnown { bpmLabel = "\(Int(bpmValue)) BPM" }
         else { bpmLabel = "BPM est." }   // both tempo services missed this song — honest default
-        statusLine = "\(info.title) — \(bpmLabel)"
+        statusLine = "\(info.title) · \(bpmLabel)"
     }
 
     // MARK: Mode S — speaker (mic-driven, live)
@@ -349,7 +349,7 @@ final class LiveCoachViewModel: ObservableObject {
         if let info = nowPlaying?.nowPlaying,
            let ref = TrackTempoResolver().lookup(title: info.title, artist: info.artist) {
             knownBPM = ref.referenceBPM
-            statusLine = "Listening — expecting ~\(Int(ref.referenceBPM ?? 0)) BPM (\(info.title))"
+            statusLine = "Listening. Expecting about \(Int(ref.referenceBPM ?? 0)) BPM for \(info.title)."
         }
 
         do {
@@ -391,7 +391,7 @@ final class LiveCoachViewModel: ObservableObject {
                 return
             }
         } else if estimator == nil {
-            statusLine = "Locking on… \(Int(analysis.tempo.bpm)) BPM?"
+            statusLine = "Locking on, around \(Int(analysis.tempo.bpm)) BPM"
             return   // need agreement before the first lock
         }
 
@@ -416,9 +416,9 @@ final class LiveCoachViewModel: ObservableObject {
         recentRawBPMs.removeAll()
         if estimator != nil {
             modeSState = .noisy
-            statusLine = "Signal noisy — soft cues, coasting"
+            statusLine = "Signal noisy. Soft cues while we coast."
         } else {
-            statusLine = "Can't hear a beat yet — is the music close enough?"
+            statusLine = "No beat yet. Is the music close enough?"
         }
     }
 
@@ -436,6 +436,18 @@ final class LiveCoachViewModel: ObservableObject {
         guard let coach, let estimator else { return }
         self.coach = LiveCoach(routine: coach.routine, clock: estimator.clock(),
                                sections: coach.sections, confidence: coach.confidence)
+    }
+
+    /// In-ride difficulty nudge: rebuilds the rest of the ride one level up or down.
+    var canNudgeDifficulty: Bool { currentInfo != nil }
+    var currentDifficultyName: String { AppServices.difficulty.name }
+
+    func nudgeDifficulty(_ delta: Int) {
+        guard let info = currentInfo else { return }
+        let level = min(max(AppServices.difficulty.rawValue + delta, 0), 4)
+        AppServices.difficultyOverride = ClassDifficulty(rawValue: level)
+        configureModeH(for: info)
+        statusLine = "Difficulty: \(AppServices.difficulty.name)"
     }
 
     /// "Tap the 1" — align the pulse to where the rider feels the downbeat.

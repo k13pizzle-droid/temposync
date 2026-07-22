@@ -34,12 +34,12 @@ struct AnalyzeLibraryView: View {
                     if vm.state == .running {
                         Button("Stop", role: .destructive) { vm.cancel() }
                     } else {
-                        Label("Done — tempos are cached for good", systemImage: "checkmark.circle.fill")
+                        Label("Done. Tempos are cached for good.", systemImage: "checkmark.circle.fill")
                             .foregroundStyle(.green)
                     }
                 }
             } footer: {
-                Text("Analysis reads each song's own audio on-device (a few seconds per track) and learns BOTH its BPM and its real structure — drops, choruses, builds — so rides get hard countdowns with true timing. Nothing leaves your phone. Streamed-only tracks have no readable audio — they resolve over the network or via a calibration ride.")
+                Text("Analysis reads each song's own audio on your phone, a few seconds per track, and learns both its BPM and its real structure: drops, choruses, builds. Rides then get countdowns with true timing. Nothing leaves your phone. Streamed-only tracks have no readable audio; they resolve over the network or with a calibration ride.")
             }
         }
         .navigationTitle("Analyze library")

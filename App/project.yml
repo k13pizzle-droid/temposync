@@ -88,6 +88,9 @@ targets:
     sources:
       - path: Sources
       - path: Shared
+      - path: Fonts
+        type: folder
+        buildPhase: resources
     entitlements:
       path: TempoSync.entitlements
       properties:
@@ -100,6 +103,11 @@ targets:
         # menus follow the system's light mode caused jarring shifts at every navigation.
         UIUserInterfaceStyle: Dark
         NSSupportsLiveActivities: true
+        UIAppFonts:
+          - Lato-Regular.ttf
+          - Lato-Bold.ttf
+          - Lato-Black.ttf
+          - Lato-Light.ttf
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait

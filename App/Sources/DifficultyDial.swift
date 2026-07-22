@@ -19,23 +19,13 @@ enum ClassDifficulty: Int, CaseIterable, Identifiable {
         }
     }
 
-    var emoji: String {
-        switch self {
-        case .superEasy: return "😌"
-        case .easy: return "🙂"
-        case .medium: return "😤"
-        case .difficult: return "🥵"
-        case .superHard: return "🔥"
-        }
-    }
-
     var blurb: String {
         switch self {
-        case .superEasy: return "Recovery day — spin and breathe"
-        case .easy: return "Gentle ride, light choreography"
-        case .medium: return "The standard class"
-        case .difficult: return "Heavy sprints, big climbs"
-        case .superHard: return "Full vocabulary. Bring a towel."
+        case .superEasy: return "Recovery pace. Spin easy and breathe."
+        case .easy: return "Light work, simple choreography."
+        case .medium: return "The standard class."
+        case .difficult: return "Heavy climbs and honest sprints."
+        case .superHard: return "Everything unlocked. Pace yourself."
         }
     }
 
@@ -62,17 +52,24 @@ enum ClassDifficulty: Int, CaseIterable, Identifiable {
     }
 }
 
-/// The dial control: drag through five detents, watch the face change.
+/// The dial control: drag through five detents; the bolt meter and color track the level.
 struct DifficultyDial: View {
     @Binding var difficulty: ClassDifficulty
 
     var body: some View {
         VStack(spacing: 10) {
             HStack(spacing: 12) {
-                Text(difficulty.emoji).font(.system(size: 44))
+                HStack(spacing: 3) {
+                    ForEach(0..<5) { i in
+                        Image(systemName: "bolt.fill")
+                            .font(.system(size: 15))
+                            .foregroundStyle(i <= difficulty.rawValue
+                                             ? difficulty.color : Color.white.opacity(0.15))
+                    }
+                }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(difficulty.name).font(.headline).foregroundStyle(difficulty.color)
-                    Text(difficulty.blurb).font(.caption).foregroundStyle(.secondary)
+                    Text(difficulty.name).font(Theme.bold(17)).foregroundStyle(difficulty.color)
+                    Text(difficulty.blurb).font(Theme.regular(12)).foregroundStyle(.secondary)
                 }
                 Spacer()
             }

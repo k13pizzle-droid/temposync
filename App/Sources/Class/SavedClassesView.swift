@@ -13,7 +13,7 @@ struct SavedClassesView: View {
     var body: some View {
         List {
             if records.isEmpty {
-                Text("No saved classes yet — build one and tap \"Save this class\".")
+                Text("No saved classes yet. Build one and tap Save this class.")
                     .foregroundStyle(.secondary)
             }
             ForEach(records, id: \.name) { record in
