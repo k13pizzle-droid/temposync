@@ -48,8 +48,10 @@ final class WatchCueSender: NSObject, WCSessionDelegate, @unchecked Sendable {
         send(["event": "move", "name": name, "rpm": rpm, "bpm": bpm])
     }
 
-    func countdown(text: String) {
-        send(["event": "countdown", "text": text])
+    /// One message per countdown window — the wrist buzzes once and counts down locally from
+    /// `seconds` (per-tick sends made the watch buzz every second of the window).
+    func countdown(move: String, seconds: Double) {
+        send(["event": "countdown", "name": move, "seconds": seconds])
     }
 
     func resistance(up: Bool) {

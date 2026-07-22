@@ -21,25 +21,29 @@ struct LiveCoachView: View {
     @AppStorage(PictogramStyle.defaultsKey) private var bikeStyleRaw = PictogramStyle.spin.rawValue
 
     var body: some View {
-        TimelineView(.animation) { context in
-            let _ = context.date                       // register the per-frame dependency
-            let frame = vm.currentFrame()
-            ZStack {
-                intensityBackground(frame.currentIntensity).ignoresSafeArea()
-                VStack(spacing: 16) {
-                    header(frame)
-                    Spacer(minLength: 8)
-                    pulse(frame)
-                    Spacer(minLength: 8)
-                    nextMoveBar(frame)
-                    phraseDots(frame)
-                    resistanceRow(frame)
-                    if vm.canNudgeDifficulty { difficultyNudgeRow }
-                    if vm.hasTransport { transportBar }
-                    if vm.modeSState != nil { tapTheOneButton }
+        ZStack {
+            // Chrome rides published low-frequency state; ONLY the beat-locked cluster below lives
+            // inside a TimelineView. Wrapping the whole screen redrew header/transport/scrubber at
+            // up to 120 Hz on ProMotion — battery spent on pixels that weren't changing.
+            intensityBackground(vm.slowIntensity).ignoresSafeArea()
+            VStack(spacing: 16) {
+                header
+                Spacer(minLength: 8)
+                TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { _ in
+                    let frame = vm.currentFrame()
+                    VStack(spacing: 16) {
+                        pulse(frame)
+                        Spacer(minLength: 8)
+                        nextMoveBar(frame)
+                        phraseDots(frame)
+                    }
                 }
-                .padding()
+                resistanceRow
+                if vm.canNudgeDifficulty { difficultyNudgeRow }
+                if vm.hasTransport { transportBar }
+                if vm.modeSState != nil { tapTheOneButton }
             }
+            .padding()
         }
         .onAppear {
             start(vm)
@@ -54,7 +58,7 @@ struct LiveCoachView: View {
 
     // MARK: Sections
 
-    private func header(_ f: LiveFrame) -> some View {
+    private var header: some View {
         HStack(alignment: .top, spacing: 10) {
             #if canImport(UIKit)
             if let art = vm.artwork {
@@ -66,7 +70,7 @@ struct LiveCoachView: View {
             }
             #endif
             VStack(alignment: .leading, spacing: 2) {
-                Text(f.sectionType?.rawValue.uppercased() ?? "—")
+                Text(vm.slowSection?.rawValue.uppercased() ?? "—")
                     .font(.caption).bold().foregroundStyle(.white.opacity(0.7))
                 Text(vm.statusLine).font(.caption2).foregroundStyle(.white.opacity(0.5))
                     .lineLimit(2)
@@ -75,11 +79,11 @@ struct LiveCoachView: View {
             // Cadence chip: the RPM target is what the rider actually holds; BPM is context.
             // (The learned/prior confidence distinction still exists internally — it gates hard
             // countdowns — but it earns UI space again only when calibration rides return.)
-            if f.bpm > 0 {
+            if vm.slowBPM > 0 {
                 VStack(alignment: .trailing, spacing: 0) {
-                    Text("~\(f.suggestedRPM) RPM")
+                    Text("~\(vm.slowRPM) RPM")
                         .font(Theme.black(19)).monospacedDigit()
-                    Text("\(Int(f.bpm)) BPM")
+                    Text("\(Int(vm.slowBPM)) BPM")
                         .font(.caption2).monospacedDigit()
                         .foregroundStyle(.white.opacity(0.7))
                 }
@@ -151,15 +155,15 @@ struct LiveCoachView: View {
         }
     }
 
-    private func resistanceRow(_ f: LiveFrame) -> some View {
+    private var resistanceRow: some View {
         HStack(spacing: 8) {
-            Image(systemName: f.resistanceUp ? "dial.high.fill" : "dial.low.fill")
-            Text(f.resistanceUp ? "Resistance UP" : "Light resistance")
+            Image(systemName: vm.slowResistanceUp ? "dial.high.fill" : "dial.low.fill")
+            Text(vm.slowResistanceUp ? "Resistance UP" : "Light resistance")
                 .font(.subheadline).bold()
         }
-        .foregroundStyle(f.resistanceUp ? .white : .white.opacity(0.6))
+        .foregroundStyle(vm.slowResistanceUp ? .white : .white.opacity(0.6))
         .padding(.horizontal, 14).padding(.vertical, 8)
-        .background(.white.opacity(f.resistanceUp ? 0.2 : 0.08), in: Capsule())
+        .background(.white.opacity(vm.slowResistanceUp ? 0.2 : 0.08), in: Capsule())
     }
 
     /// In-ride difficulty: one tap re-biases the rest of the class.
@@ -181,25 +185,28 @@ struct LiveCoachView: View {
     /// Music remote (Mode H): scrubber + previous / −15 s / play-pause / +15 s / next.
     private var transportBar: some View {
         VStack(spacing: 6) {
-            // Scrubber with elapsed / total.
-            HStack(spacing: 8) {
-                Text(timeString(isScrubbing ? scrubValue : vm.playbackPosition))
-                    .font(.caption2).monospacedDigit().foregroundStyle(.white.opacity(0.7))
-                    .frame(width: 40, alignment: .trailing)
-                Slider(
-                    value: Binding(
-                        get: { isScrubbing ? scrubValue : min(vm.playbackPosition, max(vm.playbackDuration, 1)) },
-                        set: { scrubValue = $0 }
-                    ),
-                    in: 0...max(vm.playbackDuration, 1)
-                ) { editing in
-                    if !editing { vm.scrub(to: scrubValue) }
-                    isScrubbing = editing
+            // Scrubber with elapsed / total. Half-second ticks are plenty for a position readout —
+            // it used to re-format both time labels at display refresh rate.
+            TimelineView(.periodic(from: .now, by: 0.5)) { _ in
+                HStack(spacing: 8) {
+                    Text(timeString(isScrubbing ? scrubValue : vm.playbackPosition))
+                        .font(.caption2).monospacedDigit().foregroundStyle(.white.opacity(0.7))
+                        .frame(width: 40, alignment: .trailing)
+                    Slider(
+                        value: Binding(
+                            get: { isScrubbing ? scrubValue : min(vm.playbackPosition, max(vm.playbackDuration, 1)) },
+                            set: { scrubValue = $0 }
+                        ),
+                        in: 0...max(vm.playbackDuration, 1)
+                    ) { editing in
+                        if !editing { vm.scrub(to: scrubValue) }
+                        isScrubbing = editing
+                    }
+                    .tint(.white)
+                    Text(timeString(vm.playbackDuration))
+                        .font(.caption2).monospacedDigit().foregroundStyle(.white.opacity(0.7))
+                        .frame(width: 40, alignment: .leading)
                 }
-                .tint(.white)
-                Text(timeString(vm.playbackDuration))
-                    .font(.caption2).monospacedDigit().foregroundStyle(.white.opacity(0.7))
-                    .frame(width: 40, alignment: .leading)
             }
             // Transport buttons — big targets for a handlebar mount.
             HStack(spacing: 28) {

@@ -18,6 +18,22 @@ final class LiveCoachViewModel: ObservableObject {
     @Published private(set) var modeSState: ModeSState? = nil     // non-nil only in Mode S
     @Published private(set) var hasContent = false
 
+    // Low-frequency render state for the chrome OUTSIDE the per-frame TimelineView cluster
+    // (background gradient, header chip, resistance row). The 1 Hz loop publishes these only on
+    // change — wrapping the whole screen in TimelineView redrew everything at up to 120 Hz.
+    @Published private(set) var slowIntensity: IntensityTier = .recovery
+    @Published private(set) var slowSection: SectionType? = nil
+    @Published private(set) var slowBPM = 0.0
+    @Published private(set) var slowRPM = 0
+    @Published private(set) var slowResistanceUp = false
+
+    private func publishSlowState(_ frame: LiveFrame) {
+        if frame.currentIntensity != slowIntensity { slowIntensity = frame.currentIntensity }
+        if frame.sectionType != slowSection { slowSection = frame.sectionType }
+        if frame.bpm != slowBPM { slowBPM = frame.bpm; slowRPM = frame.suggestedRPM }
+        if frame.resistanceUp != slowResistanceUp { slowResistanceUp = frame.resistanceUp }
+    }
+
     // Current render inputs (read by currentFrame(), swapped atomically on the main actor).
     private var coach: LiveCoach?
 
@@ -74,6 +90,7 @@ final class LiveCoachViewModel: ObservableObject {
         statusLine = "Demo ride"
         hasContent = true
         isRunning = true
+        publishSlowState(currentFrame())
         startWatchCues()
     }
 
@@ -105,7 +122,9 @@ final class LiveCoachViewModel: ObservableObject {
     private var watchTask: Task<Void, Never>?
     private var lastWatchMove = ""
     private var lastWatchResistance = false
-    private var lastWatchCountdown: String?
+    /// True while a countdown window is live — ONE watch message (and one buzz) per window; the
+    /// wrist counts down locally. Per-text sends made the watch buzz every second of the window.
+    private var watchCountdownActive = false
 
     // Ride telemetry (feeds the end-of-ride summary).
     private var sprintSeconds = 0
@@ -113,7 +132,7 @@ final class LiveCoachViewModel: ObservableObject {
 
     private func startWatchCues() {
         watchTask?.cancel()
-        lastWatchMove = ""; lastWatchResistance = false; lastWatchCountdown = nil
+        lastWatchMove = ""; lastWatchResistance = false; watchCountdownActive = false
         sprintSeconds = 0; movesRidden = []
         #if canImport(ActivityKit)
         LiveActivityController.shared.start()
@@ -122,6 +141,7 @@ final class LiveCoachViewModel: ObservableObject {
             while !Task.isCancelled && isRunning {
                 try? await Task.sleep(for: .seconds(1))
                 let frame = currentFrame()
+                publishSlowState(frame)
                 collectTelemetry(frame)
                 pushWatchState(frame)
                 #if canImport(ActivityKit)
@@ -159,14 +179,19 @@ final class LiveCoachViewModel: ObservableObject {
             lastWatchResistance = frame.resistanceUp
             WatchCueSender.shared.resistance(up: frame.resistanceUp)
         }
-        if let countdown = frame.countdownText, countdown != lastWatchCountdown {
-            lastWatchCountdown = countdown
-            WatchCueSender.shared.countdown(text: countdown)
-            #if os(iOS)
-            VoiceCoach.shared.speak(countdown.lowercased())
-            #endif
-        } else if frame.countdownText == nil {
-            lastWatchCountdown = nil
+        if let countdown = frame.countdownText {
+            if !watchCountdownActive {
+                watchCountdownActive = true
+                // One message per window: the wrist buzzes once and counts down locally.
+                let seconds = frame.bpm > 0
+                    ? Double(frame.countsUntilNext ?? 8) * 60.0 / frame.bpm : 4.0
+                WatchCueSender.shared.countdown(move: frame.nextMoveName ?? "Next", seconds: seconds)
+                #if os(iOS)
+                VoiceCoach.shared.speak(countdown.lowercased())
+                #endif
+            }
+        } else {
+            watchCountdownActive = false
         }
         #endif
     }
@@ -328,6 +353,7 @@ final class LiveCoachViewModel: ObservableObject {
                           clock: BeatClock(bpm: bpmValue, beatOffset: 0),  // grid origin = position 0
                           sections: sections, confidence: confidence)
         hasContent = true
+        publishSlowState(currentFrame())
 
         let bpmLabel: String
         if map != nil { bpmLabel = "learned map" }
@@ -361,6 +387,7 @@ final class LiveCoachViewModel: ObservableObject {
             return
         }
         isRunning = true
+        startWatchCues()
         analyzeTask = Task { @MainActor in
             let analyzer = BeatAnalyzer()
             while !Task.isCancelled && isRunning {
@@ -430,6 +457,7 @@ final class LiveCoachViewModel: ObservableObject {
         coach = LiveCoach(routine: RoutineGenerator().generate(request),
                           clock: estimator!.clock(), sections: sections, confidence: .prior)
         hasContent = true
+        publishSlowState(currentFrame())
     }
 
     private func refreshModeSClock() {
@@ -518,6 +546,10 @@ final class LiveCoachViewModel: ObservableObject {
         modeSState = nil
         coach = nil
         hasContent = false
+        slowIntensity = .recovery
+        slowSection = nil
+        slowBPM = 0; slowRPM = 0
+        slowResistanceUp = false
         #if canImport(UIKit)
         artwork = nil
         #endif

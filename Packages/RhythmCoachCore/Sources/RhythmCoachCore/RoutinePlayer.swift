@@ -19,68 +19,107 @@ public struct PlaybackState: Sendable, Equatable {
 
 /// Reads a generated `Routine` at any count. The app advances `count` via a `BeatClock`; this type
 /// turns that count into the concrete "what now / what next" the live screen renders.
+///
+/// Everything derivable from the immutable routine is precomputed here, once — `state(atCount:)`
+/// is called at display refresh rate for the entire ride (up to 120 Hz on ProMotion phones), so it
+/// answers with a few binary searches and zero allocations. (It used to sort the event array twice
+/// and make four full scans per call, per frame.)
 public struct RoutinePlayer: Sendable {
     public let routine: Routine
 
+    private let events: [MoveEvent]                       // sorted by startCount (strictly increasing)
+    private let blockStarts: [Int]                        // contiguous same-move run start, per event
+    private let nextDifferent: [Int?]                     // index of the next different-move event, per event
+    private let countdowns: [Cue]                         // countdown cues, atCount ascending
+    private let maxCountdownLead: Int
+    private let resistanceToggles: [(at: Int, up: Bool)]  // resistance cues, atCount ascending
+
     public init(routine: Routine) {
         self.routine = routine
-    }
+        let sorted = routine.events.sorted { $0.startCount < $1.startCount }
+        self.events = sorted
 
-    public func state(atCount count: Int) -> PlaybackState {
-        let events = routine.events
-        var current: MoveEvent? = nil
-        var currentBlockStart: Int? = nil
-
-        // Track contiguous same-move runs so tiled 16-count events read as one block.
-        var runStart = Int.min
-        var previousEnd = Int.min
-        var previousName = ""
-        for event in events.sorted(by: { $0.startCount < $1.startCount }) {
+        // Block starts: track contiguous same-move runs so tiled 16-count events read as one block.
+        var starts: [Int] = []
+        starts.reserveCapacity(sorted.count)
+        var runStart = Int.min, previousEnd = Int.min, previousName = ""
+        for event in sorted {
             if !(event.move.name == previousName && event.startCount == previousEnd) {
                 runStart = event.startCount
             }
-            if event.startCount <= count && count < event.endCount {
-                current = event
-                currentBlockStart = runStart
-            }
+            starts.append(runStart)
             previousEnd = event.endCount
             previousName = event.move.name
         }
+        self.blockStarts = starts
 
-        // "Next" = the next *different* move. Class-style pacing emits long runs of same-move
-        // blocks; the rider cares about the next transition, not the next internal block boundary.
+        // "Next" = the next *different* move (class pacing emits long same-move runs; the rider
+        // cares about the next transition, not the next internal tile boundary).
+        var nexts = [Int?](repeating: nil, count: sorted.count)
+        if sorted.count >= 2 {
+            for i in stride(from: sorted.count - 2, through: 0, by: -1) {
+                nexts[i] = sorted[i + 1].move.name != sorted[i].move.name ? i + 1 : nexts[i + 1]
+            }
+        }
+        self.nextDifferent = nexts
+
+        // Flat cue indexes. Event iteration order keeps atCounts ascending, and "last in iteration
+        // order wins" below matches the original full-scan semantics exactly.
+        var cds: [Cue] = []
+        var toggles: [(at: Int, up: Bool)] = []
+        for event in sorted {
+            for cue in event.cues {
+                switch cue.type {
+                case .countdown:      cds.append(cue)
+                case .resistanceUp:   toggles.append((cue.atCount, true))
+                case .resistanceDown: toggles.append((cue.atCount, false))
+                default:              break
+                }
+            }
+        }
+        self.countdowns = cds
+        self.maxCountdownLead = cds.compactMap { $0.leadBeats }.max() ?? 0
+        self.resistanceToggles = toggles
+    }
+
+    public func state(atCount count: Int) -> PlaybackState {
+        var current: MoveEvent? = nil
+        var currentBlockStart: Int? = nil
         var next: MoveEvent? = nil
-        for event in events.sorted(by: { $0.startCount < $1.startCount }) {
-            guard event.startCount > count else { continue }
-            if let currentMove = current?.move.name, event.move.name == currentMove { continue }
-            next = event
-            break
+
+        if let idx = lastEventStartingAtOrBefore(count) {
+            if count < events[idx].endCount {
+                current = events[idx]
+                currentBlockStart = blockStarts[idx]
+                next = nextDifferent[idx].map { events[$0] }
+            } else {
+                // Between events (or past the end): the next event is simply the first one after.
+                next = idx + 1 < events.count ? events[idx + 1] : nil
+            }
+        } else {
+            next = events.first    // before the first event
         }
 
         let countsUntilNext = next.map { $0.startCount - count }
 
-        // Active countdown: a countdown cue that has fired (atCount <= count) but whose move has not
-        // yet started (atCount + leadBeats > count).
+        // Active countdown: the last cue (in event order) whose lead window covers `count`. Only
+        // cues starting within `maxCountdownLead` of `count` can qualify — walk back at most that far.
         var activeCountdown: Cue? = nil
-        for event in events {
-            for cue in event.cues where cue.type == .countdown {
-                let lead = cue.leadBeats ?? 0
-                if cue.atCount <= count && count < cue.atCount + lead {
+        if maxCountdownLead > 0, var i = lastIndex(in: countdowns, atOrBefore: count, key: { $0.atCount }) {
+            while i >= 0, countdowns[i].atCount > count - maxCountdownLead {
+                let cue = countdowns[i]
+                if count < cue.atCount + (cue.leadBeats ?? 0) {
                     activeCountdown = cue
+                    break
                 }
+                i -= 1
             }
         }
 
-        // Resistance state: last resistance cue at or before `count` wins.
+        // Resistance: the last toggle at or before `count` wins.
         var resistanceUp = false
-        var lastResistanceAt = Int.min
-        for event in events {
-            for cue in event.cues where cue.type == .resistanceUp || cue.type == .resistanceDown {
-                if cue.atCount <= count && cue.atCount >= lastResistanceAt {
-                    lastResistanceAt = cue.atCount
-                    resistanceUp = (cue.type == .resistanceUp)
-                }
-            }
+        if let i = lastIndex(in: resistanceToggles, atOrBefore: count, key: { $0.at }) {
+            resistanceUp = resistanceToggles[i].up
         }
 
         return PlaybackState(
@@ -91,5 +130,26 @@ public struct RoutinePlayer: Sendable {
             resistanceUp: resistanceUp,
             currentBlockStart: currentBlockStart
         )
+    }
+
+    // MARK: Binary searches (rightmost element with key <= count)
+
+    private func lastEventStartingAtOrBefore(_ count: Int) -> Int? {
+        lastIndex(in: events, atOrBefore: count, key: { $0.startCount })
+    }
+
+    private func lastIndex<T>(in array: [T], atOrBefore count: Int, key: (T) -> Int) -> Int? {
+        var lo = 0, hi = array.count - 1
+        var answer: Int? = nil
+        while lo <= hi {
+            let mid = (lo + hi) / 2
+            if key(array[mid]) <= count {
+                answer = mid
+                lo = mid + 1
+            } else {
+                hi = mid - 1
+            }
+        }
+        return answer
     }
 }

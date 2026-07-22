@@ -29,11 +29,17 @@ struct WatchRideView: View {
                     .font(.footnote).foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
             } else {
-                if let countdown = session.countdownText {
-                    Text(countdown)
-                        .font(.system(.headline, design: .rounded).weight(.black))
-                        .foregroundStyle(.yellow)
-                        .lineLimit(1).minimumScaleFactor(0.6)
+                if let end = session.countdownEnd, let move = session.countdownMove, end > .now {
+                    // Wrist-local countdown: one message started it (one buzz); the timer text
+                    // counts down here with no further radio traffic.
+                    HStack(spacing: 4) {
+                        Text(move)
+                        Text(timerInterval: Date.now...end, countsDown: true)
+                            .monospacedDigit()
+                    }
+                    .font(.system(.headline, design: .rounded).weight(.black))
+                    .foregroundStyle(.yellow)
+                    .lineLimit(1).minimumScaleFactor(0.6)
                 }
                 Text(session.moveName)
                     .font(.system(.title2, design: .rounded).weight(.heavy))
@@ -61,7 +67,8 @@ final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
 
     @Published var moveName = ""
     @Published var cadenceLine = ""
-    @Published var countdownText: String?
+    @Published var countdownMove: String?
+    @Published var countdownEnd: Date?
     @Published var resistanceUp = false
 
     private override init() {
@@ -80,30 +87,33 @@ final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
     nonisolated func session(_ session: WCSession, didReceiveMessage message: [String: Any]) {
         let event = message["event"] as? String ?? ""
         let name = message["name"] as? String
-        let text = message["text"] as? String
+        let seconds = message["seconds"] as? Double
         let rpm = message["rpm"] as? Int
         let bpm = message["bpm"] as? Int
         let up = message["up"] as? Bool
         Task { @MainActor in
-            WatchSessionManager.shared.apply(event: event, name: name, text: text, rpm: rpm, bpm: bpm, up: up)
+            WatchSessionManager.shared.apply(event: event, name: name, seconds: seconds,
+                                             rpm: rpm, bpm: bpm, up: up)
         }
     }
 
-    private func apply(event: String, name: String?, text: String?, rpm: Int?, bpm: Int?, up: Bool?) {
+    private func apply(event: String, name: String?, seconds: Double?, rpm: Int?, bpm: Int?, up: Bool?) {
         switch event {
         case "move":
             if let name { moveName = name }
             if let rpm, let bpm { cadenceLine = "~\(rpm) RPM · \(bpm) BPM" }
-            countdownText = nil
+            countdownMove = nil; countdownEnd = nil
             WKInterfaceDevice.current().play(.notification)          // transition buzz
         case "countdown":
-            countdownText = text
+            // One buzz per window; the display counts down locally from `seconds`.
+            countdownMove = name
+            countdownEnd = Date().addingTimeInterval(seconds ?? 4)
             WKInterfaceDevice.current().play(.start)                 // heads-up tick
         case "resistance":
             resistanceUp = up ?? false
             WKInterfaceDevice.current().play((up ?? false) ? .directionUp : .directionDown)
         case "idle":
-            moveName = ""; cadenceLine = ""; countdownText = nil; resistanceUp = false
+            moveName = ""; cadenceLine = ""; countdownMove = nil; countdownEnd = nil; resistanceUp = false
         default:
             break
         }
