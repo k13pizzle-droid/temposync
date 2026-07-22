@@ -18,7 +18,8 @@ public enum BPMLookupSession {
     }()
 }
 
-/// GetSongBPM.com client (spec: BPM Resolver waterfall — GetSongBPM is the primary source).
+/// GetSongBPM.com client — the waterfall's LAST network rung (Deezer runs first; live probing
+/// showed GetSongBPM's search ranks obscure covers above popular originals).
 ///
 /// Requires a free API key from https://getsongbpm.com/api. Their terms require attribution with a
 /// backlink to getsongbpm.com in any app using the data — the Settings screen carries it.

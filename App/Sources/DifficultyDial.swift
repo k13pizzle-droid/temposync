@@ -67,6 +67,7 @@ struct DifficultyDial: View {
                                              ? difficulty.color : Color.white.opacity(0.15))
                     }
                 }
+                .accessibilityHidden(true)    // decorative; the slider carries name + value
                 VStack(alignment: .leading, spacing: 2) {
                     Text(difficulty.name).font(Theme.bold(17)).foregroundStyle(difficulty.color)
                     Text(difficulty.blurb).font(Theme.regular(12)).foregroundStyle(.secondary)
@@ -81,6 +82,8 @@ struct DifficultyDial: View {
                 in: 0...4, step: 1
             )
             .tint(difficulty.color)
+            .accessibilityLabel("Class difficulty")
+            .accessibilityValue(Text("\(difficulty.name). \(difficulty.blurb)"))
         }
     }
 }

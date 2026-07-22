@@ -38,6 +38,8 @@ struct SettingsView: View {
                                 .overlay(Circle().strokeBorder(.white, lineWidth: accentID == accent.id ? 2 : 0))
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel(Text("\(accent.name) accent"))
+                        .accessibilityAddTraits(accentID == accent.id ? [.isSelected] : [])
                     }
                 }
             } header: {

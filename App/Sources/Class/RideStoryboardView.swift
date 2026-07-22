@@ -36,7 +36,9 @@ struct RideStoryboardView: View {
                             Capsule()
                                 .fill(RoleStyle.color(tier: RoleStyle.tier(forMoveNamed: block.name)).opacity(0.85))
                                 .frame(width: max(24, CGFloat(block.seconds) * 2.4), height: 5)
+                                .accessibilityHidden(true)   // duration is already spoken above
                         }
+                        .accessibilityElement(children: .combine)
                     }
                 } header: {
                     HStack {

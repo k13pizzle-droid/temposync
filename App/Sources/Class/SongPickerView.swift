@@ -36,6 +36,7 @@ struct SongPickerView: View {
                         }
                     }
                     .tint(.primary)
+                    .accessibilityAddTraits(included.contains(song.trackKey) ? [.isSelected] : [])
                 }
             }
             .navigationTitle("Choose songs")

@@ -9,6 +9,7 @@ struct SavedClassesView: View {
     @State private var rideStarted = false
     @State private var renaming: SavedClassRecord?
     @State private var renameText = ""
+    @State private var startFailed = false
 
     var body: some View {
         List {
@@ -80,6 +81,11 @@ struct SavedClassesView: View {
         .navigationDestination(isPresented: $rideStarted) {
             liveView().navigationBarTitleDisplayMode(.inline)
         }
+        .alert("Couldn't start this class", isPresented: $startFailed) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("The saved class data couldn't be read. Try duplicating it, or rebuild the class.")
+        }
         .onAppear { load() }
     }
 
@@ -89,7 +95,8 @@ struct SavedClassesView: View {
     }
 
     private func start(_ record: SavedClassRecord) {
-        guard let plan = try? record.plan() else { return }
+        // Say so when the tap can't work — silently doing nothing reads as a dead button.
+        guard let plan = try? record.plan() else { startFailed = true; return }
         AppServices.activeClassPlan = plan
         AppServices.sharedProvider.startPlayback(trackKeys: plan.songs.map { $0.song.trackKey })
         rideStarted = true

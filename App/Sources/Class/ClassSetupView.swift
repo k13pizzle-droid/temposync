@@ -413,8 +413,14 @@ struct ClassSetupView: View {
         }
         if let record = try? SavedClassRecord(name: name, plan: plan) {
             AppServices.context.insert(record)
-            try? AppServices.context.save()
-            savedToast = "Saved \"\(name)\""
+            do {
+                try AppServices.context.save()
+                savedToast = "Saved \"\(name)\""
+            } catch {
+                savedToast = "Couldn't save"
+            }
+        } else {
+            savedToast = "Couldn't save"
         }
     }
 

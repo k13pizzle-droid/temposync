@@ -57,6 +57,7 @@ struct LibraryPickerView: View {
                         }
                     }
                     .tint(.primary)
+                    .accessibilityAddTraits(selection.contains(song.trackKey) ? [.isSelected] : [])
                 }
             }
             .searchable(text: $query, prompt: "Search songs or artists")

@@ -19,6 +19,7 @@ struct LiveCoachView: View {
     @State private var isScrubbing = false
     @State private var scrubValue: Double = 0
     @AppStorage(PictogramStyle.defaultsKey) private var bikeStyleRaw = PictogramStyle.spin.rawValue
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
@@ -29,7 +30,9 @@ struct LiveCoachView: View {
             VStack(spacing: 16) {
                 header
                 Spacer(minLength: 8)
-                TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { _ in
+                // Reduce Motion: the beat animation stands still (2 Hz ticks keep the countdown
+                // and dots honest); otherwise 60 fps is plenty even on ProMotion.
+                TimelineView(.animation(minimumInterval: reduceMotion ? 0.5 : 1.0 / 60.0)) { _ in
                     let frame = vm.currentFrame()
                     VStack(spacing: 16) {
                         pulse(frame)
@@ -97,7 +100,8 @@ struct LiveCoachView: View {
     private func pulse(_ f: LiveFrame) -> some View {
         // Ring snaps to full at the top of each beat (phase→0) and eases down — a visual metronome.
         // Driven directly from continuous phase; no SwiftUI animation to fight the beat.
-        let scale = 1.0 + 0.10 * (1.0 - f.beatPhase)
+        // Reduce Motion: the ring holds still and the rider holds a static pose for the move.
+        let scale = reduceMotion ? 1.05 : 1.0 + 0.10 * (1.0 - f.beatPhase)
         return ZStack {
             Circle()
                 .stroke(.white.opacity(0.25), lineWidth: 3)
@@ -107,10 +111,12 @@ struct LiveCoachView: View {
                 .frame(width: 272, height: 272)
                 .scaleEffect(scale)
             VStack(spacing: 4) {
-                MovePictogram(moveName: f.currentMoveName, beatTime: f.beatTime,
+                MovePictogram(moveName: f.currentMoveName,
+                              beatTime: reduceMotion ? 0.75 : f.beatTime,
                               countsIntoMove: f.countsIntoMove,
                               bikeStyle: PictogramStyle(rawValue: bikeStyleRaw) ?? .spin)
                     .frame(width: 150, height: 150)
+                    .accessibilityHidden(true)    // the move name below announces it
                 Text(f.currentMoveName)
                     .font(Theme.black(26))
                     .multilineTextAlignment(.center)

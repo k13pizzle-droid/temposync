@@ -111,22 +111,29 @@ struct CalibrationView: View {
 
     @ViewBuilder
     private func stateBadge(_ state: CalibrationViewModel.SongState) -> some View {
+        // Each state carries a spoken label — the symbols and colors alone say nothing to VoiceOver.
         switch state {
         case .pending:
             Image(systemName: "circle.dotted").foregroundStyle(.secondary)
+                .accessibilityLabel("Waiting")
         case .listening:
             Image(systemName: "waveform").foregroundStyle(.tint)
                 .symbolEffect(.variableColor.iterative, options: .repeating)
+                .accessibilityLabel("Listening")
         case .learned(let quality):
             HStack(spacing: 4) {
                 Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
                 Text("\(Int(quality * 100))%").font(.caption).foregroundStyle(.secondary)
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text("Learned, \(Int(quality * 100)) percent quality"))
         case .skipped(let reason):
             HStack(spacing: 4) {
                 Image(systemName: "exclamationmark.triangle").foregroundStyle(.yellow)
                 Text(reason).font(.caption).foregroundStyle(.secondary)
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text("Skipped, \(reason)"))
         }
     }
 

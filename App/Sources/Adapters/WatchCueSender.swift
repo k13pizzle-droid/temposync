@@ -28,9 +28,6 @@ final class WatchCueSender: NSObject, WCSessionDelegate, @unchecked Sendable {
         WCSession.default.activate()
     }
 
-    /// Call once early (app start) so the session is live before the first ride.
-    func activate() {}
-
     private var canSend: Bool {
         Self.cuesEnabled
             && WCSession.isSupported() && WCSession.default.activationState == .activated

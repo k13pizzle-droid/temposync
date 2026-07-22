@@ -18,7 +18,7 @@ final class LiveActivityController {
             move: "Warming up", rpm: 0, bpm: 0, countdown: nil, resistanceUp: false)
         _ = try? Activity.request(
             attributes: RideActivityAttributes(startedAt: .now),
-            content: .init(state: initial, staleDate: nil)
+            content: .init(state: initial, staleDate: .now + 20)
         )
         started = true
         lastState = initial
@@ -32,7 +32,9 @@ final class LiveActivityController {
         lastState = state
         Task.detached {
             for activity in Activity<RideActivityAttributes>.activities {
-                await activity.update(.init(state: state, staleDate: nil))
+                // staleDate: if the app dies mid-ride, the Lock Screen stops showing a live-looking
+                // move within seconds instead of indefinitely.
+                await activity.update(.init(state: state, staleDate: .now + 20))
             }
         }
     }
