@@ -7,6 +7,19 @@ import WatchConnectivity
 /// every send is a silent no-op — the phone experience never depends on the wrist.
 final class WatchCueSender: NSObject, WCSessionDelegate, @unchecked Sendable {
     static let shared = WatchCueSender()
+    static let enabledDefaultsKey = "watch_cues_enabled"
+
+    /// User toggle (default on). The home toolbar and Settings both drive this.
+    static var cuesEnabled: Bool {
+        UserDefaults.standard.object(forKey: enabledDefaultsKey) == nil
+            ? true : UserDefaults.standard.bool(forKey: enabledDefaultsKey)
+    }
+
+    /// Whether a Watch is paired at all (drives whether the toggle is shown).
+    var isPaired: Bool {
+        WCSession.isSupported() && WCSession.default.activationState == .activated
+            && WCSession.default.isPaired
+    }
 
     private override init() {
         super.init()
@@ -19,7 +32,8 @@ final class WatchCueSender: NSObject, WCSessionDelegate, @unchecked Sendable {
     func activate() {}
 
     private var canSend: Bool {
-        WCSession.isSupported() && WCSession.default.activationState == .activated
+        Self.cuesEnabled
+            && WCSession.isSupported() && WCSession.default.activationState == .activated
             && WCSession.default.isPaired && WCSession.default.isReachable
     }
 

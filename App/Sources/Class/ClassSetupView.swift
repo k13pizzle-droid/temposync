@@ -15,6 +15,8 @@ struct ClassSetupView: View {
     @State private var songs: [ClassSong] = []
     @State private var includedKeys: Set<String> = []
     @State private var showingSongPicker = false
+    @State private var showingLibraryPicker = false
+    @State private var customSource = false
     @State private var format: ClassFormat = .thirty
     @State private var reorder = true
     @State private var plan: ClassPlan?
@@ -40,7 +42,7 @@ struct ClassSetupView: View {
     var body: some View {
         List {
             playlistSection
-            if selectedPlaylist != nil {
+            if !songs.isEmpty {
                 formatSection
                 planSection
             }
@@ -55,9 +57,22 @@ struct ClassSetupView: View {
     // MARK: Sections
 
     private var playlistSection: some View {
-        Section("Playlist") {
-            if playlists.isEmpty {
-                Text("No playlists found. Build one in the Music app first.")
+        Section("Music") {
+            Button {
+                showingLibraryPicker = true
+            } label: {
+                HStack {
+                    Label("Pick from my library", systemImage: "magnifyingglass")
+                    Spacer()
+                    if customSource {
+                        Text("\(songs.count) songs").foregroundStyle(.secondary)
+                        Image(systemName: "checkmark").foregroundStyle(.tint)
+                    }
+                }
+            }
+            .tint(.primary)
+            if playlists.isEmpty && !customSource {
+                Text("No playlists found. Search your library above, or build a playlist in the Music app.")
                     .foregroundStyle(.secondary)
             }
             ForEach(playlists) { playlist in
@@ -132,6 +147,17 @@ struct ClassSetupView: View {
         .onChange(of: reorder) { rebuildPlan() }
         .sheet(isPresented: $showingSongPicker, onDismiss: { rebuildPlan() }) {
             SongPickerView(songs: songs, included: $includedKeys, provider: provider)
+        }
+        .sheet(isPresented: $showingLibraryPicker) {
+            LibraryPickerView(provider: provider,
+                              initialSelection: customSource ? includedKeys : []) { chosen in
+                customSource = true
+                selectedPlaylist = nil
+                songs = chosen
+                includedKeys = Set(chosen.map { $0.trackKey })
+                resolveBPMs()
+                rebuildPlan()
+            }
         }
     }
 
@@ -258,6 +284,7 @@ struct ClassSetupView: View {
     }
 
     private func select(_ playlist: PlaylistSummary) {
+        customSource = false
         selectedPlaylist = playlist
         songs = provider?.songs(in: playlist.id) ?? []
         includedKeys = Set(songs.map { $0.trackKey })

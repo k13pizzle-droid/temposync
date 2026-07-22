@@ -8,6 +8,7 @@ struct SettingsView: View {
     @AppStorage(HealthLogger.defaultsKey) private var healthLogging = false
     @AppStorage(PictogramStyle.defaultsKey) private var bikeStyleRaw = PictogramStyle.spin.rawValue
     @AppStorage(Theme.accentDefaultsKey) private var accentID = "pulse"
+    @AppStorage(WatchCueSender.enabledDefaultsKey) private var watchCues = true
     @AppStorage(VoiceCoach.defaultsKey) private var voiceCues = false
 
     var body: some View {
@@ -23,6 +24,7 @@ struct SettingsView: View {
                     }
                 }
                 Toggle("Voice cues (ducks the music)", isOn: $voiceCues)
+                Toggle("Apple Watch cues", isOn: $watchCues)
                 HStack {
                     Text("Accent")
                     Spacer()

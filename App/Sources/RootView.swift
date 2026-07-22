@@ -14,6 +14,7 @@ struct RootView: View {
     @State private var streakWeeks = 0
     @State private var rideAgainStarted = false
     @AppStorage(OnboardingView.defaultsKey) private var onboarded = false
+    @AppStorage(WatchCueSender.enabledDefaultsKey) private var watchCues = true
     @State private var showOnboarding = false
 
     var body: some View {
@@ -124,6 +125,18 @@ struct RootView: View {
                 modeHView().navigationBarTitleDisplayMode(.inline)
             }
             .toolbar {
+                #if canImport(WatchConnectivity)
+                if WatchCueSender.shared.isPaired {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button {
+                            watchCues.toggle()
+                        } label: {
+                            Image(systemName: watchCues ? "applewatch" : "applewatch.slash")
+                                .foregroundStyle(watchCues ? Color.accentColor : .secondary)
+                        }
+                    }
+                }
+                #endif
                 ToolbarItem(placement: .topBarTrailing) {
                     NavigationLink {
                         SettingsView()
