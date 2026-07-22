@@ -11,3 +11,4 @@ App/Info.plist
 App/Sources/Secrets.swift
 # Local build products (xcodebuild -derivedDataPath ./build)
 App/build/
+App/WatchApp/Info.plist

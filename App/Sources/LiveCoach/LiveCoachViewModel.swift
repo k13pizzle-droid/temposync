@@ -71,6 +71,7 @@ final class LiveCoachViewModel: ObservableObject {
         statusLine = "Demo ride"
         hasContent = true
         isRunning = true
+        startWatchCues()
     }
 
     // MARK: Mode H — headphones (metadata-driven)
@@ -86,6 +87,48 @@ final class LiveCoachViewModel: ObservableObject {
     private var sessionStart: Date?
     private var songsSeen = 0
 
+    // Watch cue diffing (1 Hz): send only on state CHANGES so the wrist buzzes at transitions,
+    // never continuously.
+    private var watchTask: Task<Void, Never>?
+    private var lastWatchMove = ""
+    private var lastWatchResistance = false
+    private var lastWatchCountdown: String?
+
+    private func startWatchCues() {
+        #if canImport(WatchConnectivity)
+        watchTask?.cancel()
+        lastWatchMove = ""; lastWatchResistance = false; lastWatchCountdown = nil
+        watchTask = Task { @MainActor in
+            while !Task.isCancelled && isRunning {
+                try? await Task.sleep(for: .seconds(1))
+                pushWatchState()
+            }
+        }
+        #endif
+    }
+
+    private func pushWatchState() {
+        #if canImport(WatchConnectivity)
+        let frame = currentFrame()
+        guard frame.bpm > 0 else { return }
+        if frame.currentMoveName != lastWatchMove, frame.currentMoveName != "—" {
+            lastWatchMove = frame.currentMoveName
+            WatchCueSender.shared.moveChanged(name: frame.currentMoveName,
+                                              rpm: frame.suggestedRPM, bpm: Int(frame.bpm))
+        }
+        if frame.resistanceUp != lastWatchResistance {
+            lastWatchResistance = frame.resistanceUp
+            WatchCueSender.shared.resistance(up: frame.resistanceUp)
+        }
+        if let countdown = frame.countdownText, countdown != lastWatchCountdown {
+            lastWatchCountdown = countdown
+            WatchCueSender.shared.countdown(text: countdown)
+        } else if frame.countdownText == nil {
+            lastWatchCountdown = nil
+        }
+        #endif
+    }
+
     var hasTransport: Bool { controls != nil }
 
     func startModeH(nowPlaying: NowPlayingSource, controls: PlaybackControls?, waterfall: BPMWaterfall) {
@@ -95,6 +138,7 @@ final class LiveCoachViewModel: ObservableObject {
         sessionStart = .now
         songsSeen = 0
         isRunning = true
+        startWatchCues()
 
         if let info = nowPlaying.nowPlaying {
             configureModeH(for: info)
@@ -349,6 +393,10 @@ final class LiveCoachViewModel: ObservableObject {
         AppServices.activeClassPlan = nil
 
         isRunning = false
+        watchTask?.cancel(); watchTask = nil
+        #if canImport(WatchConnectivity)
+        WatchCueSender.shared.idle()
+        #endif
         analyzeTask?.cancel(); analyzeTask = nil
         pollTask?.cancel(); pollTask = nil
         mic?.stop(); mic = nil

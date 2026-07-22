@@ -1,0 +1,56 @@
+import Foundation
+#if canImport(WatchConnectivity)
+import WatchConnectivity
+
+/// Phone → Watch cue channel. Sends transition/countdown/resistance events (spec §B5); the Watch
+/// renders them as haptics + display state. Fire-and-forget: if no Watch is paired/reachable,
+/// every send is a silent no-op — the phone experience never depends on the wrist.
+final class WatchCueSender: NSObject, WCSessionDelegate, @unchecked Sendable {
+    static let shared = WatchCueSender()
+
+    private override init() {
+        super.init()
+        guard WCSession.isSupported() else { return }
+        WCSession.default.delegate = self
+        WCSession.default.activate()
+    }
+
+    /// Call once early (app start) so the session is live before the first ride.
+    func activate() {}
+
+    private var canSend: Bool {
+        WCSession.isSupported() && WCSession.default.activationState == .activated
+            && WCSession.default.isPaired && WCSession.default.isReachable
+    }
+
+    private func send(_ payload: [String: Any]) {
+        guard canSend else { return }
+        WCSession.default.sendMessage(payload, replyHandler: nil, errorHandler: nil)
+    }
+
+    // MARK: Events
+
+    func moveChanged(name: String, rpm: Int, bpm: Int) {
+        send(["event": "move", "name": name, "rpm": rpm, "bpm": bpm])
+    }
+
+    func countdown(text: String) {
+        send(["event": "countdown", "text": text])
+    }
+
+    func resistance(up: Bool) {
+        send(["event": "resistance", "up": up])
+    }
+
+    func idle() {
+        send(["event": "idle"])
+    }
+
+    // MARK: WCSessionDelegate
+
+    func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState,
+                 error: Error?) {}
+    func sessionDidBecomeInactive(_ session: WCSession) {}
+    func sessionDidDeactivate(_ session: WCSession) { session.activate() }
+}
+#endif
