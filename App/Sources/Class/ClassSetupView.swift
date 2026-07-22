@@ -123,6 +123,7 @@ struct ClassSetupView: View {
                         }
                     }
                 }
+                .onMove { from, to in moveSongs(from: from, to: to) }
 
                 NavigationLink {
                     RideStoryboardView(plan: plan)
@@ -138,7 +139,11 @@ struct ClassSetupView: View {
                 }
                 .buttonStyle(.borderedProminent)
             } header: {
-                Text("The ride")
+                HStack {
+                    Text("The ride")
+                    Spacer()
+                    EditButton()   // enables drag-to-reorder handles
+                }
             } footer: {
                 Text(plan.reordered
                      ? "Songs reordered to fit the arc — climbs get the slow songs, the anthem takes the final sprint."
@@ -217,6 +222,19 @@ struct ClassSetupView: View {
     /// Swipe-remove: excluded for this class only (the playlist itself is untouched).
     private func removeSong(_ song: ClassSong) {
         songs.removeAll { $0.trackKey == song.trackKey }
+        rebuildPlan()
+    }
+
+    /// Drag-to-reorder: the rider takes manual control — auto-reorder switches off and the arc's
+    /// roles map onto the order they chose.
+    private func moveSongs(from source: IndexSet, to destination: Int) {
+        guard let current = effectivePlan else { return }
+        var ordered = current.songs.map { $0.song }
+        ordered.move(fromOffsets: source, toOffset: destination)
+        // Manual order wins: respect it (plus any songs not in the plan stay available at the end).
+        let planKeys = Set(ordered.map { $0.trackKey })
+        songs = ordered + songs.filter { !planKeys.contains($0.trackKey) }
+        reorder = false
         rebuildPlan()
     }
 
