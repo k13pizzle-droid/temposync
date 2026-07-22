@@ -16,7 +16,23 @@ struct CalibrationView: View {
 
     var body: some View {
         List {
-            if !vm.isRunning && !vm.isComplete {
+            if vm.micDenied {
+                Section {
+                    PermissionDeniedRow(
+                        title: "Microphone access is off",
+                        message: "Calibration listens to one out-loud playthrough to learn each song's real structure. Nothing is recorded or kept. Allow the microphone to run a calibration ride."
+                    )
+                }
+            }
+            if PermissionUX.mediaLibraryDenied {
+                Section {
+                    PermissionDeniedRow(
+                        title: "Music library access is off",
+                        message: "Calibration plays a playlist from your library. Allow music access to pick one."
+                    )
+                }
+            }
+            if !vm.isRunning && !vm.isComplete && !PermissionUX.mediaLibraryDenied {
                 Section {
                     ForEach(playlists) { playlist in
                         Button {

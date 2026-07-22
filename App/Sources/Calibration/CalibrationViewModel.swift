@@ -2,6 +2,9 @@ import Foundation
 import QuartzCore
 import BeatKit
 import RhythmCoachCore
+#if canImport(AVFAudio)
+import AVFAudio
+#endif
 
 /// Runs a calibration ride: the playlist plays out loud (phone speaker or external), the mic
 /// listens, and each song's true structure is learned and stored keyed to the SAME track IDs
@@ -19,6 +22,8 @@ final class CalibrationViewModel: ObservableObject {
     @Published private(set) var statusLine = "Ready"
     @Published private(set) var isRunning = false
     @Published private(set) var isComplete = false
+    /// Mic permission is off: calibration cannot run (the view offers the Settings jump).
+    @Published private(set) var micDenied = false
 
     private(set) var songs: [ClassSong] = []
 
@@ -33,6 +38,33 @@ final class CalibrationViewModel: ObservableObject {
 
     func start(songs: [ClassSong], provider: PlaylistProvider,
                nowPlaying: NowPlayingSource, mic: MicAudioSource) {
+        // A denied mic used to "listen" to silence and mark every song too noisy — check first,
+        // ask if never asked, and say plainly when access is off.
+        #if canImport(AVFAudio)
+        switch AVAudioApplication.shared.recordPermission {
+        case .denied:
+            micDenied = true
+            statusLine = "Microphone access is off"
+            return
+        case .undetermined:
+            // Async variant keeps everything on the main actor (the callback form would send
+            // non-Sendable provider/mic values across isolation — Swift 6 rejects it).
+            Task { @MainActor [weak self] in
+                let granted = await AVAudioApplication.requestRecordPermission()
+                guard let self else { return }
+                if granted {
+                    self.start(songs: songs, provider: provider, nowPlaying: nowPlaying, mic: mic)
+                } else {
+                    self.micDenied = true
+                    self.statusLine = "Microphone access is off"
+                }
+            }
+            return
+        default:
+            micDenied = false
+        }
+        #endif
+
         self.songs = songs
         self.nowPlaying = nowPlaying
         self.mic = mic

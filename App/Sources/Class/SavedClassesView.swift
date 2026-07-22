@@ -16,7 +16,9 @@ struct SavedClassesView: View {
                 Text("No saved classes yet. Build one and tap Save this class.")
                     .foregroundStyle(.secondary)
             }
-            ForEach(records, id: \.name) { record in
+            // Identity by model ID, not name — a rename collision briefly gave two rows the same
+            // identity, which is undefined behavior for List.
+            ForEach(records, id: \.persistentModelID) { record in
                 Button {
                     start(record)
                 } label: {
@@ -56,9 +58,20 @@ struct SavedClassesView: View {
             TextField("Name", text: $renameText)
             Button("Save") {
                 if let record = renaming {
-                    record.name = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
-                    try? AppServices.context.save()
-                    load()
+                    let base = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !base.isEmpty {
+                        // Names are unique (saves upsert by name) — renaming onto an existing name
+                        // gets the duplicate-style suffix instead of colliding.
+                        var name = base
+                        var counter = 2
+                        while records.contains(where: { $0 !== record && $0.name == name }) {
+                            name = "\(base) \(counter)"
+                            counter += 1
+                        }
+                        record.name = name
+                        try? AppServices.context.save()
+                        load()
+                    }
                 }
                 renaming = nil
             }

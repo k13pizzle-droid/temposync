@@ -78,6 +78,12 @@ struct ClassSetupView: View {
 
     private var playlistSection: some View {
         Section("Music") {
+            if PermissionUX.mediaLibraryDenied {
+                PermissionDeniedRow(
+                    title: "Music library access is off",
+                    message: "Classes are built from your playlists and songs, so nothing can load until TempoSync can see your library."
+                )
+            } else {
             Button {
                 showingLibraryPicker = true
             } label: {
@@ -109,6 +115,7 @@ struct ClassSetupView: View {
                     }
                 }
                 .tint(.primary)
+            }
             }
         }
     }
@@ -278,6 +285,13 @@ struct ClassSetupView: View {
     // MARK: Actions
 
     private func loadPlaylists() {
+        // Denied library access used to fall through to the demo fixture playlist here, which
+        // read as the user's music. Say the truth instead (the section shows the Settings jump).
+        guard !PermissionUX.mediaLibraryDenied else {
+            provider = nil
+            playlists = []
+            return
+        }
         let p = makePlaylistProvider()
         provider = p
         playlists = p.playlists()

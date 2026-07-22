@@ -63,7 +63,7 @@ public struct RoutineGenerator {
                 // gravity. Recovery spin only where the section is easy anyway.
                 let stepDown = stepDownMove(for: section)
                 let ev = makeEvent(
-                    move: stepDown, startCount: cursor, counts: phraseLen,
+                    move: stepDown, startCount: cursor, counts: phraseLen, routineStart: start,
                     isTransition: previousMoveName != stepDown.name,
                     isLeadLegPhrase: isLeadLegPhrase, confidence: request.confidence,
                     resistanceUp: &resistanceUp, lastUpperBodyStart: &lastUpperBodyStart
@@ -91,6 +91,7 @@ public struct RoutineGenerator {
                     while tiled < remaining {
                         let ev = makeEvent(
                             move: move, startCount: sc + tiled, counts: min(counts, remaining - tiled),
+                            routineStart: start,
                             isTransition: previousMoveName != move.name && tiled == 0,
                             isLeadLegPhrase: isLeadLegPhrase && offset == 0 && tiled == 0,
                             confidence: request.confidence,
@@ -124,7 +125,7 @@ public struct RoutineGenerator {
             if len >= 8 {
                 let move = MoveLibrary.seatedFlat
                 let ev = makeEvent(
-                    move: move, startCount: cursor, counts: len,
+                    move: move, startCount: cursor, counts: len, routineStart: start,
                     isTransition: previousMoveName != move.name, isLeadLegPhrase: false,
                     confidence: request.confidence,
                     resistanceUp: &resistanceUp, lastUpperBodyStart: &lastUpperBodyStart
@@ -344,6 +345,7 @@ public struct RoutineGenerator {
         move: Move,
         startCount: Int,
         counts: Int,
+        routineStart: Int,
         isTransition: Bool,
         isLeadLegPhrase: Bool,
         confidence: MapConfidence,
@@ -373,8 +375,10 @@ public struct RoutineGenerator {
         }
 
         if isTransition {
-            // Anticipatory countdown — learned maps only, attacking moves only.
-            if confidence == .learned, move.intensityTier >= .high {
+            // Anticipatory countdown — learned maps only, attacking moves only, and only when the
+            // full 8-count lead fits inside the routine (a countdown before count 0 pointed at a
+            // moment that never renders).
+            if confidence == .learned, move.intensityTier >= .high, startCount - 8 >= routineStart {
                 cues.append(Cue(type: .countdown, atCount: startCount - 8,
                                 text: "\(move.name.uppercased()) in 8", leadBeats: 8))
             }
