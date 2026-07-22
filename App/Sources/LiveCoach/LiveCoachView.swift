@@ -18,6 +18,7 @@ struct LiveCoachView: View {
 
     @State private var isScrubbing = false
     @State private var scrubValue: Double = 0
+    @AppStorage(PictogramStyle.defaultsKey) private var bikeStyleRaw = PictogramStyle.spin.rawValue
 
     var body: some View {
         TimelineView(.animation) { context in
@@ -102,7 +103,8 @@ struct LiveCoachView: View {
                 .scaleEffect(scale)
             VStack(spacing: 4) {
                 MovePictogram(moveName: f.currentMoveName, beatTime: f.beatTime,
-                              countsIntoMove: f.countsIntoMove)
+                              countsIntoMove: f.countsIntoMove,
+                              bikeStyle: PictogramStyle(rawValue: bikeStyleRaw) ?? .spin)
                     .frame(width: 150, height: 150)
                 Text(f.currentMoveName)
                     .font(.system(size: 26, weight: .heavy, design: .rounded))

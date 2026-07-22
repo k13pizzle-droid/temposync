@@ -37,6 +37,23 @@ public final class BPMWaterfall {
         "meta:\(TrackTempoResolver.normalize(title))|\(TrackTempoResolver.normalize(artist))"
     }
 
+    /// Persist an externally obtained tempo (e.g. on-device asset analysis) so future lookups are
+    /// cache hits.
+    public func store(bpm: Double, title: String, artist: String, source: String) {
+        guard let context, bpm > 0 else { return }
+        let key = Self.cacheKey(title: title, artist: artist)
+        if let existing = try? context.fetch(
+            FetchDescriptor<TrackTempoRecord>(predicate: #Predicate { $0.trackKey == key })
+        ).first {
+            existing.bpm = bpm
+            existing.source = source
+        } else {
+            context.insert(TrackTempoRecord(trackKey: key, artist: artist, title: title,
+                                            bpm: bpm, source: source))
+        }
+        try? context.save()
+    }
+
     /// Fast, synchronous rungs only (cache + seed) — what `resolve` checks before going async.
     public func resolveLocally(title: String, artist: String) -> ResolvedBPM? {
         if let context {

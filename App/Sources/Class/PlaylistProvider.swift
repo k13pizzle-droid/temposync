@@ -24,6 +24,13 @@ protocol PlaylistProvider {
     /// Album artwork for a track, if the library has it.
     func artwork(for trackKey: String, side: CGFloat) -> UIImage?
     #endif
+    /// Direct audio-file URL for a track (downloaded/purchased/DRM-free items only) — enables
+    /// in-house tempo analysis with no network.
+    func assetURL(for trackKey: String) -> URL?
+}
+
+extension PlaylistProvider {
+    func assetURL(for trackKey: String) -> URL? { nil }
 }
 
 #if canImport(UIKit)
@@ -96,6 +103,10 @@ final class MediaLibraryPlaylistProvider: PlaylistProvider {
 
     func artwork(for trackKey: String, side: CGFloat) -> UIImage? {
         items(forTrackKeys: [trackKey]).first?.artwork?.image(at: CGSize(width: side, height: side))
+    }
+
+    func assetURL(for trackKey: String) -> URL? {
+        items(forTrackKeys: [trackKey]).first?.assetURL
     }
 }
 #endif

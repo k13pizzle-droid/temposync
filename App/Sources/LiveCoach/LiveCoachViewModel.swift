@@ -277,13 +277,18 @@ final class LiveCoachViewModel: ObservableObject {
         buildModeHRoutine(info: info, map: learnedMap, bpm: learnedMap?.bpm ?? local?.bpm,
                           bpmKnown: learnedMap != nil || local != nil)
 
-        // No local answer → ask the API (once per song, ever — result is cached).
+        // No local answer → in-house analysis of the track's own audio first (no network), then
+        // the API rungs for streamed-only tracks. Either result is cached for good.
         if learnedMap == nil, local == nil, let waterfall {
             let trackKey = info.trackKey
             Task { @MainActor in
-                guard let resolved = await waterfall.resolve(title: info.title, artist: info.artist),
-                      self.currentTrackKey == trackKey else { return }
-                self.buildModeHRoutine(info: info, map: nil, bpm: resolved.bpm, bpmKnown: true)
+                var bpm = await AppServices.onDeviceBPM(trackKey: trackKey, title: info.title,
+                                                        artist: info.artist)
+                if bpm == nil {
+                    bpm = await waterfall.resolve(title: info.title, artist: info.artist)?.bpm
+                }
+                guard let bpm, self.currentTrackKey == trackKey else { return }
+                self.buildModeHRoutine(info: info, map: nil, bpm: bpm, bpmKnown: true)
             }
         }
     }

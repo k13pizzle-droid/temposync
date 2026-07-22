@@ -13,6 +13,8 @@ struct ClassSetupView: View {
     @State private var playlists: [PlaylistSummary] = []
     @State private var selectedPlaylist: PlaylistSummary?
     @State private var songs: [ClassSong] = []
+    @State private var includedKeys: Set<String> = []
+    @State private var showingSongPicker = false
     @State private var format: ClassFormat = .thirty
     @State private var reorder = true
     @State private var plan: ClassPlan?
@@ -82,9 +84,22 @@ struct ClassSetupView: View {
             }
             .pickerStyle(.segmented)
             Toggle("Reorder songs to fit the class arc", isOn: $reorder)
+            Button {
+                showingSongPicker = true
+            } label: {
+                HStack {
+                    Label("Choose songs", systemImage: "checklist")
+                    Spacer()
+                    Text("\(includedKeys.count) of \(songs.count)").foregroundStyle(.secondary)
+                }
+            }
+            .tint(.primary)
         }
         .onChange(of: format) { rebuildPlan() }
         .onChange(of: reorder) { rebuildPlan() }
+        .sheet(isPresented: $showingSongPicker, onDismiss: { rebuildPlan() }) {
+            SongPickerView(songs: songs, included: $includedKeys, provider: provider)
+        }
     }
 
     @ViewBuilder
@@ -101,9 +116,9 @@ struct ClassSetupView: View {
                             Text(planned.song.artist).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                         }
                         Spacer()
-                        if let bpm = planned.song.bpm {
-                            Text("\(Int(bpm))").font(.caption).monospacedDigit().foregroundStyle(.secondary)
-                        }
+                        Text(planned.song.bpm.map { "\(Int($0))" } ?? "—")
+                            .font(.caption).monospacedDigit().foregroundStyle(.secondary)
+                            .frame(width: 32, alignment: .trailing)
                         roleBadge(planned.role)
                     }
                     // Swipe to drop a song from this class — the plan re-fits around what's left.
@@ -208,6 +223,7 @@ struct ClassSetupView: View {
     private func select(_ playlist: PlaylistSummary) {
         selectedPlaylist = playlist
         songs = provider?.songs(in: playlist.id) ?? []
+        includedKeys = Set(songs.map { $0.trackKey })
         resolveBPMs()
         rebuildPlan()
     }
@@ -222,27 +238,34 @@ struct ClassSetupView: View {
             return ClassSong(trackKey: song.trackKey, title: song.title, artist: song.artist,
                              durationSeconds: song.durationSeconds, bpm: hit.bpm)
         }
-        // Network rung for the rest.
+        // In-house analysis of each track's own audio first (no network); API rungs only for
+        // streamed-only tracks. Results cache forever either way.
         for song in songs where song.bpm == nil {
             Task { @MainActor in
-                guard let hit = await waterfall.resolve(title: song.title, artist: song.artist) else { return }
-                if let idx = songs.firstIndex(where: { $0.trackKey == song.trackKey }) {
-                    songs[idx] = ClassSong(trackKey: song.trackKey, title: song.title, artist: song.artist,
-                                           durationSeconds: song.durationSeconds, bpm: hit.bpm)
-                    rebuildPlan()
+                var bpm = await AppServices.onDeviceBPM(trackKey: song.trackKey, title: song.title,
+                                                        artist: song.artist)
+                if bpm == nil {
+                    bpm = await waterfall.resolve(title: song.title, artist: song.artist)?.bpm
                 }
+                guard let bpm, let idx = songs.firstIndex(where: { $0.trackKey == song.trackKey }) else { return }
+                songs[idx] = ClassSong(trackKey: song.trackKey, title: song.title, artist: song.artist,
+                                       durationSeconds: song.durationSeconds, bpm: bpm)
+                rebuildPlan()
             }
         }
     }
 
+    private var includedSongs: [ClassSong] { songs.filter { includedKeys.contains($0.trackKey) } }
+
     private func rebuildPlan() {
-        guard !songs.isEmpty else { plan = nil; return }
-        plan = ClassPlanner().plan(songs: songs, format: format, reorder: reorder)
+        let pool = includedSongs
+        guard pool.count >= 2 else { plan = nil; return }
+        plan = ClassPlanner().plan(songs: pool, format: format, reorder: reorder)
     }
 
     /// Swipe-remove: excluded for this class only (the playlist itself is untouched).
     private func removeSong(_ song: ClassSong) {
-        songs.removeAll { $0.trackKey == song.trackKey }
+        includedKeys.remove(song.trackKey)
         rebuildPlan()
     }
 

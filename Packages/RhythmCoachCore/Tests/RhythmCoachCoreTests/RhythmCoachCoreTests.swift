@@ -124,6 +124,19 @@ final class RhythmCoachCoreTests: XCTestCase {
         XCTAssertEqual(Grammar.validate(RoutineGenerator().generate(req), request: req), [])
     }
 
+    // MARK: In-house asset tempo analysis (the API-independence rung)
+
+    func testAssetTempoAnalyzerMatchesTruth() throws {
+        let fixture = SyntheticFixtures.clickTrack(name: "asset", bpm: 126, durationSeconds: 40)
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("asset-tempo-test.wav")
+        try WAVFile.write(fixture.buffer, to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let result = try AssetTempoAnalyzer.analyzeSync(url: url, secondsLimit: 40)
+        XCTAssertNotNil(result)
+        XCTAssertEqual(result?.bpm ?? 0, 126, accuracy: 2, "own-file analysis should nail the tempo")
+    }
+
     // MARK: Calibration (streamed) capture → generator
 
     func testStreamedCaptureProducesValidRoutine() {

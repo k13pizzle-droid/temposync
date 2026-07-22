@@ -7,6 +7,7 @@ struct SettingsView: View {
     @AppStorage(AppServices.effortDefaultsKey) private var effort = "medium"
     @AppStorage(AppServices.skillDefaultsKey) private var skill = 2
     @AppStorage(HealthLogger.defaultsKey) private var healthLogging = false
+    @AppStorage(PictogramStyle.defaultsKey) private var bikeStyleRaw = PictogramStyle.spin.rawValue
 
     var body: some View {
         List {
@@ -21,6 +22,11 @@ struct SettingsView: View {
                     Text("1 · New").tag(1)
                     Text("2 · Regular").tag(2)
                     Text("3 · Advanced").tag(3)
+                }
+                Picker("Figure style", selection: $bikeStyleRaw) {
+                    ForEach(PictogramStyle.allCases) { style in
+                        Text(style.label).tag(style.rawValue)
+                    }
                 }
             } header: {
                 Text("Ride")

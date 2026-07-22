@@ -21,6 +21,20 @@ enum AppServices {
 
     static var context: ModelContext { container.mainContext }
 
+    /// Shared library access for cross-screen lookups (asset URLs, artwork).
+    static let sharedProvider: PlaylistProvider = makePlaylistProvider()
+
+    /// IN-HOUSE tempo rung: analyze the track's own audio file with BeatKit (no mic, no network).
+    /// Works for downloaded/purchased/DRM-free items; streamed-only tracks return nil and fall
+    /// through to the network rungs. Successful results are cached forever.
+    static func onDeviceBPM(trackKey: String, title: String, artist: String) async -> Double? {
+        guard let url = sharedProvider.assetURL(for: trackKey) else { return nil }
+        guard let analyzed = (try? await AssetTempoAnalyzer.analyze(url: url)) ?? nil,
+              analyzed.strength >= 0.03 else { return nil }
+        makeBPMWaterfall().store(bpm: analyzed.bpm, title: title, artist: artist, source: "on-device")
+        return analyzed.bpm
+    }
+
     /// The class currently being ridden (nil = freestyle). Set by ClassSetupView on start; the live
     /// view model reads per-track roles from it and clears it when the session ends.
     static var activeClassPlan: ClassPlan?

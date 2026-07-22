@@ -6,11 +6,29 @@ import SwiftUI
 ///   · sprints double to one revolution per beat
 ///   · jumps rise/sit on a 4-count cycle, tap-backs push back on the "&", corners lean each 4
 /// Direction arrows (yellow) pulse with the motion they describe.
+/// User-selectable bike rendering (Settings → Ride → Figure style).
+enum PictogramStyle: String, CaseIterable, Identifiable {
+    case spin      // stationary spin bike: floor rail, front flywheel, upright masts (default)
+    case classic   // the original two-wheel road-bike glyph
+    case minimal   // rider only, faint seat/bar references
+
+    var id: String { rawValue }
+    static let defaultsKey = "pictogram_style"
+    var label: String {
+        switch self {
+        case .spin: return "Spin bike"
+        case .classic: return "Road bike"
+        case .minimal: return "Minimal"
+        }
+    }
+}
+
 struct MovePictogram: View {
     let moveName: String
     let beatTime: Double
     /// Beats since this move's block began — drives progressive animation (jump ladder, combos).
     var countsIntoMove: Double = 0
+    var bikeStyle: PictogramStyle = .spin
 
     var body: some View {
         Canvas { ctx, size in
@@ -213,17 +231,44 @@ struct MovePictogram: View {
     }
 
     private func drawBike(_ ctx: inout GraphicsContext, _ pose: Pose) {
-        let rear = CGPoint(x: 26, y: 78), front = CGPoint(x: 78, y: 78)
         let crank = CGPoint(x: 52, y: 70)
-        circle(&ctx, rear, 11); circle(&ctx, front, 11)
-        // Frame
-        stroke(&ctx, [rear, crank], width: 3)
-        stroke(&ctx, [crank, CGPoint(x: 72, y: 46)], width: 3)                 // down tube to head
-        stroke(&ctx, [CGPoint(x: 72, y: 46), front], width: 3)                 // fork
-        stroke(&ctx, [crank, CGPoint(x: 40, y: 46)], width: 3)                 // seat tube
-        stroke(&ctx, [CGPoint(x: 34, y: 46), CGPoint(x: 45, y: 46)], width: 3.6)   // seat
-        stroke(&ctx, [CGPoint(x: 72, y: 46), CGPoint(x: 74, y: 39)], width: 3)     // bar stem
-        stroke(&ctx, [CGPoint(x: 69, y: 39), CGPoint(x: 79, y: 39)], width: 3.6)   // bars
+        switch bikeStyle {
+        case .spin:
+            // Floor rail + feet — it's a STATIONARY bike.
+            stroke(&ctx, [CGPoint(x: 26, y: 87), CGPoint(x: 78, y: 87)], width: 3.6)
+            stroke(&ctx, [CGPoint(x: 30, y: 87), CGPoint(x: 26, y: 92)], width: 3)
+            stroke(&ctx, [CGPoint(x: 74, y: 87), CGPoint(x: 78, y: 92)], width: 3)
+            // Front flywheel: heavy solid disc + rim, belt line from the crank.
+            let flywheel = CGPoint(x: 69, y: 76)
+            ctx.fill(Path(ellipseIn: CGRect(x: flywheel.x - 9, y: flywheel.y - 9, width: 18, height: 18)),
+                     with: .color(.white.opacity(0.28)))
+            circle(&ctx, flywheel, 9, width: 2.6)
+            circle(&ctx, flywheel, 1.8, fill: true)
+            stroke(&ctx, [crank, flywheel], width: 2, shading: Self.dim)          // belt
+            // Center post down to the rail, seat mast, bar mast — upright studio geometry.
+            stroke(&ctx, [crank, CGPoint(x: 52, y: 87)], width: 3)
+            stroke(&ctx, [crank, CGPoint(x: 40, y: 46)], width: 3)                 // seat mast
+            stroke(&ctx, [CGPoint(x: 34, y: 46), CGPoint(x: 45, y: 46)], width: 3.6)   // seat
+            stroke(&ctx, [crank, CGPoint(x: 71, y: 47)], width: 3)                 // bar mast
+            stroke(&ctx, [CGPoint(x: 71, y: 47), CGPoint(x: 74, y: 39)], width: 3)     // stem
+            stroke(&ctx, [CGPoint(x: 69, y: 39), CGPoint(x: 79, y: 39)], width: 3.6)   // bars
+        case .classic:
+            let rear = CGPoint(x: 26, y: 78), front = CGPoint(x: 78, y: 78)
+            circle(&ctx, rear, 11); circle(&ctx, front, 11)
+            stroke(&ctx, [rear, crank], width: 3)
+            stroke(&ctx, [crank, CGPoint(x: 72, y: 46)], width: 3)                 // down tube to head
+            stroke(&ctx, [CGPoint(x: 72, y: 46), front], width: 3)                 // fork
+            stroke(&ctx, [crank, CGPoint(x: 40, y: 46)], width: 3)                 // seat tube
+            stroke(&ctx, [CGPoint(x: 34, y: 46), CGPoint(x: 45, y: 46)], width: 3.6)   // seat
+            stroke(&ctx, [CGPoint(x: 72, y: 46), CGPoint(x: 74, y: 39)], width: 3)     // bar stem
+            stroke(&ctx, [CGPoint(x: 69, y: 39), CGPoint(x: 79, y: 39)], width: 3.6)   // bars
+        case .minimal:
+            // Rider is the star: just faint seat/bar references so the poses stay legible.
+            stroke(&ctx, [CGPoint(x: 34, y: 46), CGPoint(x: 45, y: 46)], width: 3, shading: Self.dim)
+            stroke(&ctx, [CGPoint(x: 69, y: 39), CGPoint(x: 79, y: 39)], width: 3, shading: Self.dim)
+            stroke(&ctx, [CGPoint(x: 40, y: 46), CGPoint(x: 46, y: 62)], width: 2, shading: Self.dim)
+            stroke(&ctx, [CGPoint(x: 74, y: 39), CGPoint(x: 68, y: 56)], width: 2, shading: Self.dim)
+        }
     }
 
     private func drawRider(_ ctx: inout GraphicsContext, _ pose: Pose) {
