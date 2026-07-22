@@ -234,22 +234,25 @@ struct MovePictogram: View {
         let crank = CGPoint(x: 52, y: 70)
         switch bikeStyle {
         case .spin:
-            // Floor rail + feet — it's a STATIONARY bike.
-            stroke(&ctx, [CGPoint(x: 26, y: 87), CGPoint(x: 78, y: 87)], width: 3.6)
-            stroke(&ctx, [CGPoint(x: 30, y: 87), CGPoint(x: 26, y: 92)], width: 3)
-            stroke(&ctx, [CGPoint(x: 74, y: 87), CGPoint(x: 78, y: 92)], width: 3)
-            // Front flywheel: heavy solid disc + rim, belt line from the crank.
-            let flywheel = CGPoint(x: 69, y: 76)
-            ctx.fill(Path(ellipseIn: CGRect(x: flywheel.x - 9, y: flywheel.y - 9, width: 18, height: 18)),
+            // Keiser-style studio bike (modeled on Kevin's M3i reference): the flywheel rides LOW
+            // at the REAR behind the seat mast, the seat and bar masts form a V from the bottom
+            // bracket, and everything stands on a long floor rail.
+            stroke(&ctx, [CGPoint(x: 20, y: 88), CGPoint(x: 76, y: 88)], width: 3.6)   // floor rail
+            stroke(&ctx, [CGPoint(x: 24, y: 88), CGPoint(x: 21, y: 93)], width: 3)     // rear foot
+            stroke(&ctx, [CGPoint(x: 72, y: 88), CGPoint(x: 75, y: 93)], width: 3)     // front foot
+            // Rear flywheel: heavy disc + rim, belt line back from the crank.
+            let flywheel = CGPoint(x: 29, y: 75)
+            ctx.fill(Path(ellipseIn: CGRect(x: flywheel.x - 10, y: flywheel.y - 10, width: 20, height: 20)),
                      with: .color(.white.opacity(0.28)))
-            circle(&ctx, flywheel, 9, width: 2.6)
+            circle(&ctx, flywheel, 10, width: 2.6)
             circle(&ctx, flywheel, 1.8, fill: true)
-            stroke(&ctx, [crank, flywheel], width: 2, shading: Self.dim)          // belt
-            // Center post down to the rail, seat mast, bar mast — upright studio geometry.
-            stroke(&ctx, [crank, CGPoint(x: 52, y: 87)], width: 3)
-            stroke(&ctx, [crank, CGPoint(x: 40, y: 46)], width: 3)                 // seat mast
+            stroke(&ctx, [crank, flywheel], width: 2, shading: Self.dim)               // belt
+            // Frame: forward strut down to the rail; the V of seat mast + bar mast meets at the
+            // bottom bracket (the M3i's signature open-V silhouette).
+            stroke(&ctx, [crank, CGPoint(x: 58, y: 88)], width: 3)                     // strut
+            stroke(&ctx, [crank, CGPoint(x: 40, y: 46)], width: 3)                     // seat mast
             stroke(&ctx, [CGPoint(x: 34, y: 46), CGPoint(x: 45, y: 46)], width: 3.6)   // seat
-            stroke(&ctx, [crank, CGPoint(x: 71, y: 47)], width: 3)                 // bar mast
+            stroke(&ctx, [crank, CGPoint(x: 71, y: 47)], width: 3)                     // bar mast
             stroke(&ctx, [CGPoint(x: 71, y: 47), CGPoint(x: 74, y: 39)], width: 3)     // stem
             stroke(&ctx, [CGPoint(x: 69, y: 39), CGPoint(x: 79, y: 39)], width: 3.6)   // bars
         case .classic:
