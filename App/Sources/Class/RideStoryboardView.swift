@@ -22,10 +22,16 @@ struct RideStoryboardView: View {
             ForEach(boards) { board in
                 Section {
                     ForEach(Array(board.blocks.enumerated()), id: \.offset) { _, block in
-                        HStack {
-                            Text(block.name)
-                            Spacer()
-                            Text("\(block.seconds)s").monospacedDigit().foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: 5) {
+                            HStack {
+                                Text(block.name)
+                                Spacer()
+                                Text("\(block.seconds)s").monospacedDigit().foregroundStyle(.secondary)
+                            }
+                            // Effort bar: width ∝ duration, color = the move's effort tier.
+                            Capsule()
+                                .fill(RoleStyle.color(tier: RoleStyle.tier(forMoveNamed: block.name)).opacity(0.85))
+                                .frame(width: max(24, CGFloat(block.seconds) * 2.4), height: 5)
                         }
                     }
                 } header: {
@@ -34,6 +40,7 @@ struct RideStoryboardView: View {
                         Spacer()
                         Text("\(board.role.rawValue.uppercased()) · \(Int(board.bpm)) BPM"
                              + (board.learned ? " · learned" : ""))
+                            .foregroundStyle(RoleStyle.color(board.role))
                     }
                 }
             }

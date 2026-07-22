@@ -35,11 +35,59 @@ targets:
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"
 
+  TempoSyncTV:
+    type: application
+    platform: tvOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: TVApp
+      - path: Sources/LiveCoach/MovePictogram.swift
+    info:
+      path: TVApp/Info.plist
+      properties:
+        CFBundleDisplayName: TempoSync
+        UIUserInterfaceStyle: Dark
+    dependencies:
+      - package: RoutineKit
+      - package: BeatKit
+      - package: RhythmCoachCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.pizzmusic.TempoSync.tv
+        GENERATE_INFOPLIST_FILE: NO
+        SWIFT_VERSION: "6.0"
+        CODE_SIGN_STYLE: Automatic
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+
+  TempoSyncWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: Widgets
+      - path: Shared
+    info:
+      path: Widgets/Info.plist
+      properties:
+        CFBundleDisplayName: TempoSync
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.pizzmusic.TempoSync.widgets
+        GENERATE_INFOPLIST_FILE: NO
+        SWIFT_VERSION: "6.0"
+        CODE_SIGN_STYLE: Automatic
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SKIP_INSTALL: YES
+
   TempoSync:
     type: application
     platform: iOS
     sources:
       - path: Sources
+      - path: Shared
     entitlements:
       path: TempoSync.entitlements
       properties:
@@ -51,6 +99,7 @@ targets:
         # Whole-app dark appearance: the ride screens are gradient-dark by design, and letting the
         # menus follow the system's light mode caused jarring shifts at every navigation.
         UIUserInterfaceStyle: Dark
+        NSSupportsLiveActivities: true
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
@@ -71,12 +120,13 @@ targets:
       - package: BeatKit
       - package: RhythmCoachCore
       - target: TempoSyncWatch
+      - target: TempoSyncWidgets
     settings:
       base:
         MARKETING_VERSION: "0.1.0"
         CURRENT_PROJECT_VERSION: "1"
         GENERATE_INFOPLIST_FILE: NO
-        TARGETED_DEVICE_FAMILY: "1"
+        TARGETED_DEVICE_FAMILY: "1,2"
         SWIFT_VERSION: "6.0"
         # Automatic signing: open in Xcode once and pick your team under Signing & Capabilities,
         # OR pass DEVELOPMENT_TEAM=XXXXXXXXXX to xcodebuild. A free Apple ID works for development.

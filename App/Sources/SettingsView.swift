@@ -8,6 +8,7 @@ struct SettingsView: View {
     @AppStorage(AppServices.skillDefaultsKey) private var skill = 2
     @AppStorage(HealthLogger.defaultsKey) private var healthLogging = false
     @AppStorage(PictogramStyle.defaultsKey) private var bikeStyleRaw = PictogramStyle.spin.rawValue
+    @AppStorage(VoiceCoach.defaultsKey) private var voiceCues = false
 
     var body: some View {
         List {
@@ -28,6 +29,7 @@ struct SettingsView: View {
                         Text(style.label).tag(style.rawValue)
                     }
                 }
+                Toggle("Voice cues (ducks the music)", isOn: $voiceCues)
             } header: {
                 Text("Ride")
             } footer: {
@@ -60,6 +62,16 @@ struct SettingsView: View {
                          : "Using your override key instead of the built-in one.")
                     Link("Tempo data by GetSongBPM", destination: URL(string: "https://getsongbpm.com")!)
                 }
+            }
+
+            Section {
+                NavigationLink {
+                    AnalyzeLibraryView()
+                } label: {
+                    Label("Analyze my library", systemImage: "waveform.badge.magnifyingglass")
+                }
+            } footer: {
+                Text("One pass measures every downloaded song's BPM from its own audio — class building becomes instant and offline.")
             }
 
             Section {

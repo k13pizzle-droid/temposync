@@ -13,3 +13,5 @@ App/Sources/Secrets.swift
 App/build/
 App/WatchApp/Info.plist
 App/TempoSync.entitlements
+App/TVApp/Info.plist
+App/Widgets/Info.plist

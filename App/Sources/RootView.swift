@@ -11,6 +11,8 @@ struct RootView: View {
     @State private var lastSavedClass: SavedClassRecord?
     @State private var lastRide: RideLogRecord?
     @State private var rideAgainStarted = false
+    @AppStorage(OnboardingView.defaultsKey) private var onboarded = false
+    @State private var showOnboarding = false
 
     var body: some View {
         NavigationStack {
@@ -90,6 +92,8 @@ struct RootView: View {
                     }
                 }
                 .padding()
+                .frame(maxWidth: 640)                    // iPad: keep the cards readable
+                .frame(maxWidth: .infinity)
             }
             .navigationTitle("TempoSync")
             .sheet(item: $summaries.pending) { summary in
@@ -107,7 +111,11 @@ struct RootView: View {
                     }
                 }
             }
-            .onAppear { loadShortcuts() }
+            .onAppear {
+                loadShortcuts()
+                if !onboarded { showOnboarding = true }
+            }
+            .sheet(isPresented: $showOnboarding) { OnboardingView() }
         }
     }
 

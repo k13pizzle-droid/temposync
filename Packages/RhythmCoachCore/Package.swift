@@ -9,7 +9,7 @@ import PackageDescription
 // stays unit-testable on macOS; the app target supplies the concrete iOS adapters.
 let package = Package(
     name: "RhythmCoachCore",
-    platforms: [.macOS(.v14), .iOS(.v17)],
+    platforms: [.macOS(.v14), .iOS(.v17), .tvOS(.v17)],
     products: [
         .library(name: "RhythmCoachCore", targets: ["RhythmCoachCore"]),
     ],

@@ -14,7 +14,7 @@ import PackageDescription
 //   BeatKitTests  — XCTest suite (`swift test`, needs full Xcode).
 let package = Package(
     name: "BeatKit",
-    platforms: [.macOS(.v13), .iOS(.v16)],
+    platforms: [.macOS(.v13), .iOS(.v16), .tvOS(.v16)],
     products: [
         .library(name: "BeatKit", targets: ["BeatKit"]),
     ],

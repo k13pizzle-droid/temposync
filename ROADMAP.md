@@ -1,7 +1,16 @@
 # TempoSync — Product Roadmap to Consumer-Ready
 *Working doc, started 2026-07-21. Owner: Kevin. Ordered by leverage, not effort.*
 
-## ✅ Shipped in the current build (round 10)
+## ✅ Shipped since (rounds 11–16)
+- Calibration ride (streamed capture → learned SectionMaps) · GitHub live (k13pizzle-droid/temposync)
+- Watch companion (haptics + wrist display) · Live Activity (Lock Screen/Dynamic Island)
+- Saved classes (+rename/duplicate/collages) · end-of-ride summary · HealthKit workouts
+- In-house BPM (own-audio analysis; APIs now last-resort) · batch "Analyze my library"
+- Song picker for big playlists · BPM column · role overrides · drag-reorder · storyboard effort bars
+- Spin-bike/road/minimal figure styles · album artwork (header, rows) · scrub seek-grace fix
+- Voice cues (opt-in) · consumer home redesign · onboarding · iPad family · tvOS demo scaffold
+
+## ✅ Shipped in round 10
 - **Whole-app dark appearance** — killed the light/dark flip between menus and ride screens
   (`UIUserInterfaceStyle: Dark`; studio-app convention).
 - **Swipe-to-remove** songs from the class plan (class-only exclusion; playlist untouched; plan re-fits).
@@ -50,8 +59,21 @@
 ## Music & data — medium-term
 - **MusicKit adapter** — full Apple Music catalog (current MPMediaQuery only sees the local
   library); catalog search, curated playlist import. Needs paid dev account + user AM subscription.
-- **Spotify adapter** — the other half of the market; app-remote SDK controls playback the same way
-  the transport bar does today. (Spec Phase 1.)
+- **Spotify adapter** (design notes, 2026-07-21) — the other half of the market:
+  · **Playback/queueing**: Spotify iOS SDK "App Remote" controls the Spotify app the way the
+    transport bar drives Apple Music today; Web API builds/reads playlists. Requires a Spotify
+    developer app registration + OAuth; users need Premium for on-demand queueing.
+  · **BPM**: Spotify's audio-features API (tempo per track) was deprecated for new apps in Nov 2024
+    — assume unavailable. Our stack covers it: in-house asset analysis won't work (no file access),
+    so Spotify tracks resolve via Deezer/GetSongBPM and, best of all, the calibration ride.
+  · **Section maps**: same as Apple Music — calibration ride only.
+  · Architecture is ready: `PlaylistProvider` + `NowPlayingSource`/`PlaybackControls` are protocols;
+    a SpotifyProvider slots in beside the MediaPlayer one with no core changes.
+- **tvOS at-home experience** (scaffolded 2026-07-21: TempoSyncTV target runs the demo ride
+  natively — RoutineKit/Core/pictograms all compile for Apple TV). Full story: the phone remains
+  the brain (music + BPM + maps + class plan) and streams live LiveFrame state to the TV over the
+  local network (Multipeer/Bonjour); the TV renders the big class screen while the phone stays the
+  remote. Alternative (later): standalone tvOS MusicKit playback for phones-free riding.
 - **Community tempo + section maps** — CloudKit public database: one user's BPM lookup/calibration
   benefits everyone; free, serverless. (Spec Phase 2.)
 - **Beat-grid offsets per track** — calibration byproduct; makes the Mode H pulse sample-accurate.

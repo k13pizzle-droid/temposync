@@ -27,10 +27,13 @@ protocol PlaylistProvider {
     /// Direct audio-file URL for a track (downloaded/purchased/DRM-free items only) — enables
     /// in-house tempo analysis with no network.
     func assetURL(for trackKey: String) -> URL?
+    /// Every song in the library (deduped) — feeds the batch tempo analyzer.
+    func allSongs() -> [ClassSong]
 }
 
 extension PlaylistProvider {
     func assetURL(for trackKey: String) -> URL? { nil }
+    func allSongs() -> [ClassSong] { [] }
 }
 
 #if canImport(UIKit)
@@ -108,6 +111,18 @@ final class MediaLibraryPlaylistProvider: PlaylistProvider {
     func assetURL(for trackKey: String) -> URL? {
         items(forTrackKeys: [trackKey]).first?.assetURL
     }
+
+    func allSongs() -> [ClassSong] {
+        var seen = Set<UInt64>()
+        return (MPMediaQuery.songs().items ?? []).compactMap { item in
+            guard seen.insert(item.persistentID).inserted else { return nil }
+            let key = "mp:\(item.persistentID)"
+            itemsByKey[key] = item
+            return ClassSong(trackKey: key, title: item.title ?? "Unknown",
+                             artist: item.artist ?? "Unknown",
+                             durationSeconds: item.playbackDuration, bpm: nil)
+        }
+    }
 }
 #endif
 
@@ -120,6 +135,8 @@ final class PreviewPlaylistProvider: PlaylistProvider {
     func songs(in playlistID: String) -> [ClassSong] { RealTrackFixturesSongs }
 
     func startPlayback(trackKeys: [String]) {}
+
+    func allSongs() -> [ClassSong] { RealTrackFixturesSongs }
 
     private var RealTrackFixturesSongs: [ClassSong] {
         [

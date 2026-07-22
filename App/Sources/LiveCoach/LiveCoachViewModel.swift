@@ -115,12 +115,22 @@ final class LiveCoachViewModel: ObservableObject {
         watchTask?.cancel()
         lastWatchMove = ""; lastWatchResistance = false; lastWatchCountdown = nil
         sprintSeconds = 0; movesRidden = []
+        #if canImport(ActivityKit)
+        LiveActivityController.shared.start()
+        #endif
         watchTask = Task { @MainActor in
             while !Task.isCancelled && isRunning {
                 try? await Task.sleep(for: .seconds(1))
                 let frame = currentFrame()
                 collectTelemetry(frame)
                 pushWatchState(frame)
+                #if canImport(ActivityKit)
+                if frame.bpm > 0 {
+                    LiveActivityController.shared.update(
+                        move: frame.currentMoveName, rpm: frame.suggestedRPM, bpm: Int(frame.bpm),
+                        countdown: frame.countdownText, resistanceUp: frame.resistanceUp)
+                }
+                #endif
             }
         }
     }
@@ -141,6 +151,9 @@ final class LiveCoachViewModel: ObservableObject {
             lastWatchMove = frame.currentMoveName
             WatchCueSender.shared.moveChanged(name: frame.currentMoveName,
                                               rpm: frame.suggestedRPM, bpm: Int(frame.bpm))
+            #if os(iOS)
+            VoiceCoach.shared.speak(frame.currentMoveName)
+            #endif
         }
         if frame.resistanceUp != lastWatchResistance {
             lastWatchResistance = frame.resistanceUp
@@ -149,6 +162,9 @@ final class LiveCoachViewModel: ObservableObject {
         if let countdown = frame.countdownText, countdown != lastWatchCountdown {
             lastWatchCountdown = countdown
             WatchCueSender.shared.countdown(text: countdown)
+            #if os(iOS)
+            VoiceCoach.shared.speak(countdown.lowercased())
+            #endif
         } else if frame.countdownText == nil {
             lastWatchCountdown = nil
         }
@@ -462,6 +478,9 @@ final class LiveCoachViewModel: ObservableObject {
 
         isRunning = false
         watchTask?.cancel(); watchTask = nil
+        #if canImport(ActivityKit)
+        LiveActivityController.shared.end()
+        #endif
         #if canImport(WatchConnectivity)
         WatchCueSender.shared.idle()
         #endif
