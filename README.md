@@ -1,5 +1,7 @@
 # TempoSync v2 — Phase 0
 
+*Beat-synced spin coaching for iOS. Tempo data by [GetSongBPM](https://getsongbpm.com).*
+
 Rhythm Coach + RunSync, per `tempo-sync-spec-v2.md`. This repo currently contains the two
 **pure-Swift core-IP packages** from the kickoff prompt (steps 1–2), built and verified.
 
