@@ -246,15 +246,21 @@ struct MovePictogram: View {
                      with: .color(.white.opacity(0.28)))
             circle(&ctx, flywheel, 10, width: 2.6)
             circle(&ctx, flywheel, 1.8, fill: true)
-            stroke(&ctx, [crank, flywheel], width: 2, shading: Self.dim)               // belt
+            stroke(&ctx, [crank, flywheel], width: 2.8, shading: Self.dim)             // drive arm
             // Frame: forward strut down to the rail; the V of seat mast + bar mast meets at the
-            // bottom bracket (the M3i's signature open-V silhouette).
+            // bottom bracket (the M3i's signature open-V silhouette). The drive arm to the flywheel
+            // is a solid member on the real bike, not just a belt line.
             stroke(&ctx, [crank, CGPoint(x: 58, y: 88)], width: 3)                     // strut
-            stroke(&ctx, [crank, CGPoint(x: 40, y: 46)], width: 3)                     // seat mast
-            stroke(&ctx, [CGPoint(x: 34, y: 46), CGPoint(x: 45, y: 46)], width: 3.6)   // seat
+            stroke(&ctx, [crank, CGPoint(x: 40, y: 49)], width: 3)                     // seat mast
+            stroke(&ctx, [CGPoint(x: 40, y: 49), CGPoint(x: 40, y: 46)], width: 2.6)   // seat post
+            stroke(&ctx, [CGPoint(x: 34, y: 46), CGPoint(x: 45, y: 46)], width: 3.6)   // saddle
             stroke(&ctx, [crank, CGPoint(x: 71, y: 47)], width: 3)                     // bar mast
             stroke(&ctx, [CGPoint(x: 71, y: 47), CGPoint(x: 74, y: 39)], width: 3)     // stem
-            stroke(&ctx, [CGPoint(x: 69, y: 39), CGPoint(x: 79, y: 39)], width: 3.6)   // bars
+            // Bullhorn bars: flat rear grip rising into a modest forward horn, like the M3i's.
+            stroke(&ctx, [CGPoint(x: 68, y: 40), CGPoint(x: 74, y: 39),
+                          CGPoint(x: 76.5, y: 38), CGPoint(x: 78, y: 36)], width: 3.4)
+            // Transport rollers on the front foot.
+            circle(&ctx, CGPoint(x: 73, y: 90.5), 1.5, width: 1.8)
         case .classic:
             let rear = CGPoint(x: 26, y: 78), front = CGPoint(x: 78, y: 78)
             circle(&ctx, rear, 11); circle(&ctx, front, 11)
@@ -279,17 +285,29 @@ struct MovePictogram: View {
         let grip = CGPoint(x: 74, y: 39)
         let hip = pose.hip
 
-        // Torso + head (figure-8s sway the shoulders on a lissajous)
+        // Torso as a SPINE: a gentle rearward bow instead of a straight strut — the single biggest
+        // "reads human" win. Direction and length are unchanged, so every pose holds.
         let torsoLen = 17.0
-        let shoulder = CGPoint(x: hip.x + torsoLen * sin(pose.torsoLean) + pose.shoulderSway.x,
-                               y: hip.y - torsoLen * cos(pose.torsoLean) + pose.shoulderSway.y)
-        let headC = CGPoint(x: shoulder.x + 6.5 * sin(pose.torsoLean),
-                            y: shoulder.y - 6.5 * cos(pose.torsoLean))
-        stroke(&ctx, [hip, shoulder], width: 4.2)
-        circle(&ctx, headC, 4.4, fill: true)
+        let dir = CGPoint(x: sin(pose.torsoLean), y: -cos(pose.torsoLean))
+        let shoulder = CGPoint(x: hip.x + torsoLen * dir.x + pose.shoulderSway.x,
+                               y: hip.y + torsoLen * dir.y + pose.shoulderSway.y)
+        let mid = CGPoint(x: (hip.x + shoulder.x) / 2, y: (hip.y + shoulder.y) / 2)
+        let control = CGPoint(x: mid.x + 1.6 * dir.y, y: mid.y - 1.6 * dir.x)   // bows to the back
+        var spine = Path()
+        spine.move(to: hip)
+        spine.addQuadCurve(to: shoulder, control: control)
+        ctx.stroke(spine, with: Self.white,
+                   style: StrokeStyle(lineWidth: 4.4, lineCap: .round))
+        circle(&ctx, hip, 2.4, fill: true)                       // pelvis node grounds the joints
 
-        // Arm: shoulder → elbow (sags with press) → grip. Wide grips render a second, splayed arm —
-        // the open "diamond" between them reads as elbow width in side view.
+        // Neck + head: a short neck with a gap reads far more human than a head fused to the spine.
+        let neckEnd = CGPoint(x: shoulder.x + 3.0 * dir.x, y: shoulder.y + 3.0 * dir.y)
+        stroke(&ctx, [shoulder, neckEnd], width: 3.2)
+        let headC = CGPoint(x: shoulder.x + 7.4 * dir.x, y: shoulder.y + 7.4 * dir.y)
+        circle(&ctx, headC, 4.2, fill: true)
+
+        // Arm: shoulder → elbow (sags with press) → grip, with a hand node on the bars. Wide grips
+        // render a second, splayed arm — the open "diamond" between them reads as elbow width.
         let elbow = CGPoint(x: (shoulder.x + grip.x) / 2, y: (shoulder.y + grip.y) / 2 + pose.elbowSag)
         stroke(&ctx, [shoulder, elbow, grip], width: 3.4)
         if pose.armSplay > 0 {
@@ -297,14 +315,17 @@ struct MovePictogram: View {
                                 y: (shoulder.y + grip.y) / 2 - pose.elbowSag * 0.8 * pose.armSplay)
             stroke(&ctx, [shoulder, flare, grip], width: 3.0, shading: Self.dim)
         }
+        circle(&ctx, grip, 1.7, fill: true)                      // hand
 
-        // Legs to both pedals (far leg dimmed for depth)
+        // Legs to both pedals (far leg dimmed for depth), each ending in a flat shoe on the pedal.
         let r = 8.5
         let pedalA = CGPoint(x: crank.x + r * cos(pose.crankAngle), y: crank.y + r * sin(pose.crankAngle))
         let pedalB = CGPoint(x: crank.x - r * cos(pose.crankAngle), y: crank.y - r * sin(pose.crankAngle))
         for (pedal, shading, w) in [(pedalB, Self.dim, 3.2), (pedalA, Self.white, 3.8)] {
             let knee = CGPoint(x: (hip.x + pedal.x) / 2 + 6, y: (hip.y + pedal.y) / 2 - 2)
             stroke(&ctx, [hip, knee, pedal], width: w, shading: shading)
+            stroke(&ctx, [CGPoint(x: pedal.x - 1.6, y: pedal.y), CGPoint(x: pedal.x + 2.8, y: pedal.y)],
+                   width: w + 0.4, shading: shading)             // shoe, flat through the stroke
         }
         circle(&ctx, crank, 2.2, fill: true)
     }
