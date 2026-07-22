@@ -48,10 +48,14 @@ public struct TempoEstimator: Sendable {
             return sum
         }
 
+        // One sweep, values cached by lag — parabolic refinement and octave folding used to rerun
+        // full O(n) autocorrelation passes for lags the sweep had already computed and discarded.
+        var cached = [Double](repeating: 0, count: maxLag + 1)
         var bestLag = minLag
         var bestValue = -Double.infinity
         for l in minLag...maxLag {
             let v = autocorr(l)
+            cached[l] = v
             if v > bestValue { bestValue = v; bestLag = l }
         }
 
@@ -60,9 +64,9 @@ public struct TempoEstimator: Sendable {
         // where one lag step is ~2 BPM and the resulting drift blows the beat-phase budget).
         var refinedLag = Double(bestLag)
         if bestLag > minLag && bestLag < maxLag {
-            let ym1 = autocorr(bestLag - 1)
+            let ym1 = cached[bestLag - 1]
             let y0 = bestValue
-            let yp1 = autocorr(bestLag + 1)
+            let yp1 = cached[bestLag + 1]
             let denom = ym1 - 2 * y0 + yp1
             if denom != 0 {
                 let delta = 0.5 * (ym1 - yp1) / denom     // in [-1, 1]
@@ -79,7 +83,8 @@ public struct TempoEstimator: Sendable {
         } else {
             // Fold into the preferred range, but only if the folded lag is also a strong peak —
             // avoids halving a genuinely fast track.
-            bpm = foldIntoPreferred(bpm, autocorr: autocorr, fr: fr, energy0: energy0)
+            bpm = foldIntoPreferred(bpm, autocorr: autocorr, cached: cached,
+                                    minLag: minLag, maxLag: maxLag, fr: fr, energy0: energy0)
         }
 
         return TempoEstimate(bpm: bpm, strength: strength)
@@ -90,13 +95,16 @@ public struct TempoEstimator: Sendable {
         return candidates.min(by: { abs($0 - target) < abs($1 - target) }) ?? bpm
     }
 
-    private func foldIntoPreferred(_ bpm: Double, autocorr: (Int) -> Double, fr: Double, energy0: Double) -> Double {
+    private func foldIntoPreferred(_ bpm: Double, autocorr: (Int) -> Double, cached: [Double],
+                                   minLag: Int, maxLag: Int, fr: Double, energy0: Double) -> Double {
         var result = bpm
         func lag(_ b: Double) -> Int { Int((60.0 * fr / b).rounded()) }
         func strengthAt(_ b: Double) -> Double {
             let l = lag(b)
             guard l >= 1 else { return -1 }
-            return autocorr(l) / energy0
+            // Sweep cache covers every lag the guards can reach; the closure is the safety net.
+            let v = (l >= minLag && l <= maxLag) ? cached[l] : autocorr(l)
+            return v / energy0
         }
         // If below preferred low, try doubling while the doubled tempo is a comparably strong peak.
         while result < preferredLow {

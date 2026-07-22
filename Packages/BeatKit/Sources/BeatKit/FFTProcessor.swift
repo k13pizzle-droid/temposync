@@ -9,23 +9,29 @@ final class FFTProcessor {
     private let setup: FFTSetup
     private let halfN: Int
 
+    // Scratch reused across calls (the class is single-threaded by contract) — magnitudes() runs
+    // once per hop, ~20k times per analyzed song, and used to allocate all four buffers per call.
+    private var real: [Float]
+    private var imag: [Float]
+    private var magsSquared: [Float]
+
     init(n: Int) {
         precondition(n > 0 && (n & (n - 1)) == 0, "FFT size must be a power of two")
         self.n = n
         self.halfN = n / 2
         self.log2n = vDSP_Length(log2(Double(n)).rounded())
         self.setup = vDSP_create_fftsetup(log2n, FFTRadix(kFFTRadix2))!
+        self.real = [Float](repeating: 0, count: halfN)
+        self.imag = [Float](repeating: 0, count: halfN)
+        self.magsSquared = [Float](repeating: 0, count: halfN)
     }
 
     deinit { vDSP_destroy_fftsetup(setup) }
 
     /// Magnitude spectrum (length n/2) of a real frame that has already been windowed.
+    /// The returned array is a fresh copy (callers keep it as `previous` for flux diffs).
     func magnitudes(_ frame: [Float]) -> [Float] {
         precondition(frame.count == n, "frame must be exactly n samples")
-        var real = [Float](repeating: 0, count: halfN)
-        var imag = [Float](repeating: 0, count: halfN)
-        var magsSquared = [Float](repeating: 0, count: halfN)
-
         real.withUnsafeMutableBufferPointer { realPtr in
             imag.withUnsafeMutableBufferPointer { imagPtr in
                 var split = DSPSplitComplex(realp: realPtr.baseAddress!, imagp: imagPtr.baseAddress!)

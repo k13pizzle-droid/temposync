@@ -386,6 +386,9 @@ final class LiveCoachViewModel: ObservableObject {
             statusLine = "Mic error: \(error.localizedDescription)"
             return
         }
+        #if os(iOS)
+        VoiceCoach.shared.suppressed = true    // mic session owner; TTS would contaminate capture
+        #endif
         isRunning = true
         startWatchCues()
         analyzeTask = Task { @MainActor in
@@ -532,6 +535,9 @@ final class LiveCoachViewModel: ObservableObject {
         analyzeTask?.cancel(); analyzeTask = nil
         pollTask?.cancel(); pollTask = nil
         mic?.stop(); mic = nil
+        #if os(iOS)
+        VoiceCoach.shared.suppressed = false
+        #endif
         estimator = nil
         knownBPM = nil
         recentRawBPMs.removeAll()

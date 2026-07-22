@@ -17,6 +17,7 @@ public final class StreamingAnalyzer {
     private let fft: FFTProcessor
     private var previousMags: [Float]?
     private var pending: [Float] = []
+    private var frame: [Float]
     private var flux: [Float] = []
 
     // RMS energy, one value per 0.25 s window (matches SectionDetector's default).
@@ -31,6 +32,7 @@ public final class StreamingAnalyzer {
         self.sampleRate = sampleRate
         self.window = hannWindow(frameSize)
         self.fft = FFTProcessor(n: frameSize)
+        self.frame = [Float](repeating: 0, count: frameSize)
         self.energyWindowSamples = max(1, Int(0.25 * sampleRate))
     }
 
@@ -52,11 +54,13 @@ public final class StreamingAnalyzer {
             }
         }
 
-        // Onset flux, frame by frame with hop continuity across chunk boundaries.
+        // Onset flux, frame by frame with hop continuity across chunk boundaries. A read cursor
+        // walks `pending` and the residue compacts ONCE per feed — removeFirst(hopSize) per hop
+        // memmoved the whole residue ~64 times per 32k chunk (quadratic if fed a whole file).
         pending.append(contentsOf: samples)
-        var frame = [Float](repeating: 0, count: frameSize)
-        while pending.count >= frameSize {
-            for i in 0..<frameSize { frame[i] = pending[i] * window[i] }
+        var start = 0
+        while pending.count - start >= frameSize {
+            for i in 0..<frameSize { frame[i] = pending[start + i] * window[i] }
             let mags = fft.magnitudes(frame)
             if let previous = previousMags {
                 var sum: Float = 0
@@ -69,8 +73,9 @@ public final class StreamingAnalyzer {
                 flux.append(0)
             }
             previousMags = mags
-            pending.removeFirst(hopSize)
+            start += hopSize
         }
+        if start > 0 { pending.removeFirst(start) }
     }
 
     // MARK: Finalize

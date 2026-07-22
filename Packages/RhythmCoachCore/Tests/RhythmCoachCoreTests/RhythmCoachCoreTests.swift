@@ -386,6 +386,38 @@ final class RhythmCoachCoreTests: XCTestCase {
         XCTAssertEqual(totalCalls, 1)
     }
 
+    actor MissingBPMService: BPMLookupService {
+        private(set) var calls = 0
+        func lookupBPM(title: String, artist: String) async throws -> Double? {
+            calls += 1
+            return nil
+        }
+        func callCount() async -> Int { calls }
+    }
+
+    @MainActor
+    func testWaterfallCachesMisses() async throws {
+        // A song no service knows must not re-fire the network on every ride — the miss itself is
+        // cached (with a TTL) and the local rungs stay honest (no fake hit from the sentinel).
+        let container = try SectionMapStore.inMemoryContainer()
+        let service = MissingBPMService()
+        let waterfall = BPMWaterfall(service: service, context: ModelContext(container))
+
+        let first = await waterfall.resolve(title: "Ghost Track", artist: "Nobody")
+        XCTAssertNil(first)
+        let second = await waterfall.resolve(title: "Ghost Track", artist: "Nobody")
+        XCTAssertNil(second)
+        let calls = await service.callCount()
+        XCTAssertEqual(calls, 1, "second resolve must hit the miss sentinel, not the network")
+        XCTAssertNil(waterfall.resolveLocally(title: "Ghost Track", artist: "Nobody"),
+                     "a miss sentinel is not a BPM hit")
+
+        // A later real result overwrites the sentinel.
+        waterfall.store(bpm: 140, title: "Ghost Track", artist: "Nobody", source: "on-device")
+        XCTAssertEqual(waterfall.resolveLocally(title: "Ghost Track", artist: "Nobody"),
+                       ResolvedBPM(bpm: 140, source: .cache))
+    }
+
     // MARK: Mode S clock estimator
 
     func testModeSTapAlignsBeatToTapTime() {

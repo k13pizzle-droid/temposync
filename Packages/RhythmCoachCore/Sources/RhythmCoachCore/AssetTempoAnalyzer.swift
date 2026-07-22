@@ -34,38 +34,20 @@ public enum AssetTempoAnalyzer {
     }
 
     static func structureSync(url: URL) throws -> StreamingAnalyzer.Result? {
-        let file = try AVAudioFile(forReading: url)
-        let format = file.processingFormat
-        let sampleRate = format.sampleRate
-        let channels = Int(format.channelCount)
-        guard sampleRate > 0, channels > 0 else { return nil }
-
-        let analyzer = StreamingAnalyzer(sampleRate: sampleRate)
-        let chunk: AVAudioFrameCount = 32_768
-        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: chunk) else { return nil }
-
-        while file.framePosition < file.length {
-            try file.read(into: buffer, frameCount: chunk)
-            let frames = Int(buffer.frameLength)
-            guard frames > 0, let channelData = buffer.floatChannelData else { break }
-            var mono = [Float](repeating: 0, count: frames)
-            for channel in 0..<channels {
-                let data = channelData[channel]
-                for i in 0..<frames { mono[i] += data[i] }
-            }
-            if channels > 1 {
-                let scale = 1.0 / Float(channels)
-                for i in 0..<frames { mono[i] *= scale }
-            }
-            analyzer.feed(mono)
-        }
-
-        let result = analyzer.finalize()
-        guard result.analysis.tempo.bpm > 60 else { return nil }
+        guard let result = try stream(url: url, secondsLimit: nil),
+              result.analysis.tempo.bpm > 60 else { return nil }
         return result
     }
 
     static func analyzeSync(url: URL, secondsLimit: Double) throws -> Result? {
+        guard let result = try stream(url: url, secondsLimit: secondsLimit),
+              result.analysis.tempo.bpm > 60, result.analysis.tempo.strength > 0 else { return nil }
+        return Result(bpm: result.analysis.tempo.bpm, strength: result.analysis.tempo.strength)
+    }
+
+    /// One decode-downmix-feed loop for both entry points (they used to be ~90% duplicated).
+    /// The downmix buffer is allocated once for the whole file, not per chunk.
+    private static func stream(url: URL, secondsLimit: Double?) throws -> StreamingAnalyzer.Result? {
         let file = try AVAudioFile(forReading: url)
         let format = file.processingFormat
         let sampleRate = format.sampleRate
@@ -73,30 +55,35 @@ public enum AssetTempoAnalyzer {
         guard sampleRate > 0, channels > 0 else { return nil }
 
         let analyzer = StreamingAnalyzer(sampleRate: sampleRate)
-        let limitFrames = AVAudioFramePosition(secondsLimit * sampleRate)
         let chunk: AVAudioFrameCount = 32_768
         guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: chunk) else { return nil }
+        let endFrame = secondsLimit.map { min(file.length, AVAudioFramePosition($0 * sampleRate)) }
+            ?? file.length
 
-        while file.framePosition < min(file.length, limitFrames) {
+        var mono = [Float](repeating: 0, count: Int(chunk))
+        while file.framePosition < endFrame {
             try file.read(into: buffer, frameCount: chunk)
             let frames = Int(buffer.frameLength)
             guard frames > 0, let channelData = buffer.floatChannelData else { break }
-            // Downmix to mono.
-            var mono = [Float](repeating: 0, count: frames)
-            for channel in 0..<channels {
-                let data = channelData[channel]
-                for i in 0..<frames { mono[i] += data[i] }
-            }
+            let first = channelData[0]
+            for i in 0..<frames { mono[i] = first[i] }
             if channels > 1 {
+                for channel in 1..<channels {
+                    let data = channelData[channel]
+                    for i in 0..<frames { mono[i] += data[i] }
+                }
                 let scale = 1.0 / Float(channels)
                 for i in 0..<frames { mono[i] *= scale }
             }
-            analyzer.feed(mono)
+            // Full chunks feed the reused buffer directly (feed copies values, keeps no reference);
+            // only the final partial chunk pays for a slice copy.
+            if frames == mono.count {
+                analyzer.feed(mono)
+            } else {
+                analyzer.feed(Array(mono[0..<frames]))
+            }
         }
-
-        let result = analyzer.finalize()
-        guard result.analysis.tempo.bpm > 60, result.analysis.tempo.strength > 0 else { return nil }
-        return Result(bpm: result.analysis.tempo.bpm, strength: result.analysis.tempo.strength)
+        return analyzer.finalize()
     }
 }
 #endif

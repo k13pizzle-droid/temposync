@@ -6,6 +6,18 @@ public protocol BPMLookupService: Sendable {
     func lookupBPM(title: String, artist: String) async throws -> Double?
 }
 
+/// Short-timeout session shared by the tempo services: a dead network must degrade to "BPM est."
+/// in seconds — the URLSession default of 60 s per request could hold a mid-ride track change
+/// hostage for minutes across the service chain.
+public enum BPMLookupSession {
+    public static let tuned: URLSession = {
+        let config = URLSessionConfiguration.ephemeral
+        config.timeoutIntervalForRequest = 6
+        config.timeoutIntervalForResource = 12
+        return URLSession(configuration: config)
+    }()
+}
+
 /// GetSongBPM.com client (spec: BPM Resolver waterfall — GetSongBPM is the primary source).
 ///
 /// Requires a free API key from https://getsongbpm.com/api. Their terms require attribution with a
@@ -14,7 +26,7 @@ public struct GetSongBPMService: BPMLookupService {
     public let apiKey: String
     private let session: URLSession
 
-    public init(apiKey: String, session: URLSession = .shared) {
+    public init(apiKey: String, session: URLSession = BPMLookupSession.tuned) {
         self.apiKey = apiKey
         self.session = session
     }

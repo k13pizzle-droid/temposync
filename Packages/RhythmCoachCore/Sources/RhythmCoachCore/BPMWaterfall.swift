@@ -37,32 +37,44 @@ public final class BPMWaterfall {
         "meta:\(TrackTempoResolver.normalize(title))|\(TrackTempoResolver.normalize(artist))"
     }
 
-    /// Persist an externally obtained tempo (e.g. on-device asset analysis) so future lookups are
-    /// cache hits.
-    public func store(bpm: Double, title: String, artist: String, source: String) {
-        guard let context, bpm > 0 else { return }
+    /// A full-waterfall miss is remembered for this long — an unknown song used to re-fire every
+    /// network rung on every ride, forever. Stale misses retry (catalogs grow).
+    private static let missSource = "miss"
+    private static let missTTL: TimeInterval = 7 * 24 * 60 * 60
+
+    private func cachedRecord(title: String, artist: String) -> TrackTempoRecord? {
+        guard let context else { return nil }
         let key = Self.cacheKey(title: title, artist: artist)
-        if let existing = try? context.fetch(
+        return try? context.fetch(
             FetchDescriptor<TrackTempoRecord>(predicate: #Predicate { $0.trackKey == key })
-        ).first {
+        ).first
+    }
+
+    private func upsert(bpm: Double, title: String, artist: String, source: String) {
+        guard let context else { return }
+        if let existing = cachedRecord(title: title, artist: artist) {
             existing.bpm = bpm
             existing.source = source
+            existing.updatedAt = .now
         } else {
-            context.insert(TrackTempoRecord(trackKey: key, artist: artist, title: title,
-                                            bpm: bpm, source: source))
+            context.insert(TrackTempoRecord(trackKey: Self.cacheKey(title: title, artist: artist),
+                                            artist: artist, title: title, bpm: bpm, source: source))
         }
         try? context.save()
     }
 
+    /// Persist an externally obtained tempo (e.g. on-device asset analysis) so future lookups are
+    /// cache hits.
+    public func store(bpm: Double, title: String, artist: String, source: String) {
+        guard bpm > 0 else { return }
+        upsert(bpm: bpm, title: title, artist: artist, source: source)
+    }
+
     /// Fast, synchronous rungs only (cache + seed) — what `resolve` checks before going async.
+    /// Miss sentinels are not hits: the UI stays honest ("BPM est.").
     public func resolveLocally(title: String, artist: String) -> ResolvedBPM? {
-        if let context {
-            let key = Self.cacheKey(title: title, artist: artist)
-            if let record = try? context.fetch(
-                FetchDescriptor<TrackTempoRecord>(predicate: #Predicate { $0.trackKey == key })
-            ).first {
-                return ResolvedBPM(bpm: record.bpm, source: .cache)
-            }
+        if let record = cachedRecord(title: title, artist: artist), record.bpm > 0 {
+            return ResolvedBPM(bpm: record.bpm, source: .cache)
         }
         if let ref = seed.lookup(title: title, artist: artist), let bpm = ref.referenceBPM {
             return ResolvedBPM(bpm: bpm, source: .seed)
@@ -74,22 +86,29 @@ public final class BPMWaterfall {
     /// errors degrade to nil rather than throwing — the caller keeps its default-BPM routine and
     /// stays honest about it.
     public func resolve(title: String, artist: String) async -> ResolvedBPM? {
-        if let local = resolveLocally(title: title, artist: artist) { return local }
+        if let record = cachedRecord(title: title, artist: artist) {
+            if record.bpm > 0 { return ResolvedBPM(bpm: record.bpm, source: .cache) }
+            if record.source == Self.missSource,
+               Date.now.timeIntervalSince(record.updatedAt) < Self.missTTL {
+                return nil    // known miss, still fresh — skip the network entirely
+            }
+        }
+        if let ref = seed.lookup(title: title, artist: artist), let bpm = ref.referenceBPM {
+            return ResolvedBPM(bpm: bpm, source: .seed)
+        }
         for service in services {
             guard let bpm = try? await service.lookupBPM(title: title, artist: artist), bpm > 0 else {
                 continue
             }
-            // Persist so this song never hits the network again.
-            if let context {
-                let record = TrackTempoRecord(
-                    trackKey: Self.cacheKey(title: title, artist: artist),
-                    artist: artist, title: title, bpm: bpm,
-                    source: String(describing: type(of: service))
-                )
-                context.insert(record)
-                try? context.save()
-            }
+            // Persist so this song never hits the network again (upsert: a stale miss sentinel or
+            // a concurrent resolve for the same song must update, not double-insert).
+            upsert(bpm: bpm, title: title, artist: artist,
+                   source: String(describing: type(of: service)))
             return ResolvedBPM(bpm: bpm, source: .api)
+        }
+        // Every rung missed: remember that, with a TTL.
+        if !services.isEmpty {
+            upsert(bpm: 0, title: title, artist: artist, source: Self.missSource)
         }
         return nil
     }

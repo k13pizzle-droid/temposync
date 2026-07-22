@@ -6,7 +6,7 @@ import Foundation
 public struct DeezerBPMService: BPMLookupService {
     private let session: URLSession
 
-    public init(session: URLSession = .shared) {
+    public init(session: URLSession = BPMLookupSession.tuned) {
         self.session = session
     }
 

@@ -29,7 +29,7 @@ final class CalibrationViewModel: ObservableObject {
 
     private var mic: MicAudioSource?
     private var nowPlaying: NowPlayingSource?
-    private var analyzer: StreamingAnalyzer?
+    private let worker = CalibrationAnalysisWorker()
     private var currentKey: String?
     private var knownBPMs: [String: Double] = [:]
     private var pollTask: Task<Void, Never>?
@@ -81,9 +81,17 @@ final class CalibrationViewModel: ObservableObject {
             }
         }
 
+        #if os(iOS)
+        // Spoken cues would fight the mic's audio session AND contaminate the capture.
+        VoiceCoach.shared.suppressed = true
+        #endif
+
         do {
-            try mic.start { [weak self] samples, _ in
-                Task { @MainActor in self?.analyzer?.feed(samples) }
+            // DSP runs on the worker actor, off the UI thread — the tap fires ~21×/s and every
+            // feed does FFT flux work (a 45-minute ride's analysis used to run on the main actor).
+            let worker = self.worker
+            try mic.start { samples, _ in
+                Task { await worker.feed(samples) }
             }
         } catch {
             statusLine = "Mic error: \(error.localizedDescription)"
@@ -97,27 +105,27 @@ final class CalibrationViewModel: ObservableObject {
         pollTask = Task { @MainActor in
             while !Task.isCancelled && isRunning {
                 try? await Task.sleep(for: .seconds(1))
-                pollOnce()
+                await pollOnce()
             }
         }
     }
 
-    private func pollOnce() {
+    private func pollOnce() async {
         guard let nowPlaying else { return }
         let info = nowPlaying.nowPlaying
 
         if info?.trackKey != currentKey {
-            finalizeCurrent()
+            await finalizeCurrent()
             if let info {
                 sawAnyTrack = true
                 silentPolls = 0
                 currentKey = info.trackKey
-                analyzer = StreamingAnalyzer(sampleRate: mic?.sampleRate ?? 44_100)
+                await worker.begin(sampleRate: mic?.sampleRate ?? 44_100)
                 if states[info.trackKey] != nil { states[info.trackKey] = .listening }
                 statusLine = "Learning: \(info.title)"
             } else {
                 currentKey = nil
-                analyzer = nil
+                await worker.discard()
             }
             return
         }
@@ -125,24 +133,23 @@ final class CalibrationViewModel: ObservableObject {
         // Playlist finished? (a few nil polls after we've seen tracks)
         if info == nil, sawAnyTrack {
             silentPolls += 1
-            if silentPolls >= 5 { complete() }
+            if silentPolls >= 5 { await complete() }
         }
     }
 
-    private func finalizeCurrent() {
-        guard let key = currentKey, let analyzer else { return }
-        defer { self.analyzer = nil }
+    private func finalizeCurrent() async {
+        guard let key = currentKey else { return }
+        guard let result = await worker.finalize(knownBPM: knownBPMs[key]) else { return }
 
         let song = songs.first { $0.trackKey == key }
         let expected = song?.durationSeconds ?? 0
 
         // Must have heard most of the song for a whole-structure map to be trustworthy.
-        guard expected == 0 || analyzer.durationSeconds >= expected * 0.6 else {
+        guard expected == 0 || result.durationSeconds >= expected * 0.6 else {
             states[key] = .skipped("heard too little")
             return
         }
 
-        let result = analyzer.finalize(knownBPM: knownBPMs[key])
         guard result.analysis.tempo.bpm > 60, result.analysis.tempo.strength >= 0.08 else {
             states[key] = .skipped("too noisy")
             return
@@ -157,18 +164,38 @@ final class CalibrationViewModel: ObservableObject {
         }
     }
 
-    private func complete() {
-        finalizeCurrent()
+    private func complete() async {
+        guard !isComplete else { return }
+        await finalizeCurrent()
         isRunning = false
         isComplete = true
         let learned = states.values.filter { if case .learned = $0 { return true }; return false }.count
         statusLine = "Done — \(learned) of \(songs.count) songs learned"
         mic?.stop(); mic = nil
         pollTask?.cancel(); pollTask = nil
+        #if os(iOS)
+        VoiceCoach.shared.suppressed = false
+        #endif
     }
 
     func stop() {
         guard isRunning || mic != nil else { return }
-        complete()
+        Task { @MainActor in await complete() }
+    }
+}
+
+/// Owns the StreamingAnalyzer off the main actor and serializes feeds/finalize — mic DSP must not
+/// run on the UI thread. One analyzer per song; a stray chunk that lands between songs is dropped
+/// (≤ 50 ms of audio, irrelevant against a whole-song capture).
+private actor CalibrationAnalysisWorker {
+    private var analyzer: StreamingAnalyzer?
+
+    func begin(sampleRate: Double) { analyzer = StreamingAnalyzer(sampleRate: sampleRate) }
+    func discard() { analyzer = nil }
+    func feed(_ samples: [Float]) { analyzer?.feed(samples) }
+
+    func finalize(knownBPM: Double?) -> StreamingAnalyzer.Result? {
+        defer { analyzer = nil }
+        return analyzer?.finalize(knownBPM: knownBPM)
     }
 }
