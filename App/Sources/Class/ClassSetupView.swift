@@ -52,6 +52,26 @@ struct ClassSetupView: View {
             modeHView().navigationBarTitleDisplayMode(.inline)
         }
         .onAppear { loadPlaylists() }
+        .onChange(of: format) { rebuildPlan() }
+        .onChange(of: reorder) { rebuildPlan() }
+        // Sheets attach to the List, not to a section: sections inside `if !songs.isEmpty` come and
+        // go (and rebuild as async BPM results mutate `songs`), and a sheet whose host leaves the
+        // hierarchy is torn down mid-presentation — the "picker snaps away" bug. The List survives
+        // every state change, so presentations anchored here do too.
+        .sheet(isPresented: $showingSongPicker, onDismiss: { rebuildPlan() }) {
+            SongPickerView(songs: songs, included: $includedKeys, provider: provider)
+        }
+        .sheet(isPresented: $showingLibraryPicker) {
+            LibraryPickerView(provider: provider,
+                              initialSelection: customSource ? includedKeys : []) { chosen in
+                customSource = true
+                selectedPlaylist = nil
+                songs = chosen
+                includedKeys = Set(chosen.map { $0.trackKey })
+                resolveBPMs()
+                rebuildPlan()
+            }
+        }
     }
 
     // MARK: Sections
@@ -142,22 +162,6 @@ struct ClassSetupView: View {
                 }
             }
             .tint(.primary)
-        }
-        .onChange(of: format) { rebuildPlan() }
-        .onChange(of: reorder) { rebuildPlan() }
-        .sheet(isPresented: $showingSongPicker, onDismiss: { rebuildPlan() }) {
-            SongPickerView(songs: songs, included: $includedKeys, provider: provider)
-        }
-        .sheet(isPresented: $showingLibraryPicker) {
-            LibraryPickerView(provider: provider,
-                              initialSelection: customSource ? includedKeys : []) { chosen in
-                customSource = true
-                selectedPlaylist = nil
-                songs = chosen
-                includedKeys = Set(chosen.map { $0.trackKey })
-                resolveBPMs()
-                rebuildPlan()
-            }
         }
     }
 
