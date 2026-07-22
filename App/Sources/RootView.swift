@@ -5,6 +5,8 @@ import RhythmCoachCore
 /// (RunSync shelved 2026-07-21 → Shelved/RunSync/. Mode S (mic) UI shelved same day per round-2
 /// feedback — the code stays dormant in LiveCoachViewModel for the future "calibration ride".)
 struct RootView: View {
+    @StateObject private var summaries = SummaryCenter.shared
+
     var body: some View {
         NavigationStack {
             List {
@@ -33,10 +35,14 @@ struct RootView: View {
                     }
                 }
                 Section {
+                    NavigationLink("Saved classes") { SavedClassesView() }
                     NavigationLink("Ride history") { RideHistoryView() }
                 }
             }
             .navigationTitle("TempoSync")
+            .sheet(item: $summaries.pending) { summary in
+                RideSummaryView(summary: summary)
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     NavigationLink {

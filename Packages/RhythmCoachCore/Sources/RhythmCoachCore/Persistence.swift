@@ -81,12 +81,77 @@ public final class RideLogRecord {
     }
 }
 
+/// One song inside a saved class (Codable payload for `SavedClassRecord`).
+public struct SavedClassSong: Codable, Sendable {
+    public let trackKey: String
+    public let title: String
+    public let artist: String
+    public let durationSeconds: Double
+    public let bpm: Double?
+    public let role: String
+
+    public init(_ planned: PlannedSong) {
+        self.trackKey = planned.song.trackKey
+        self.title = planned.song.title
+        self.artist = planned.song.artist
+        self.durationSeconds = planned.song.durationSeconds
+        self.bpm = planned.song.bpm
+        self.role = planned.role.rawValue
+    }
+
+    public var asPlanned: PlannedSong {
+        PlannedSong(
+            song: ClassSong(trackKey: trackKey, title: title, artist: artist,
+                            durationSeconds: durationSeconds, bpm: bpm),
+            role: SongRole(rawValue: role) ?? .run
+        )
+    }
+}
+
+/// A named, re-rideable class. Same songs + same roles + same seeds = the identical class every
+/// time — which is the point: rides become learnable, like a real studio class.
+@Model
+public final class SavedClassRecord {
+    @Attribute(.unique) public var name: String
+    public var createdAt: Date
+    public var formatMinutes: Int
+    public var reordered: Bool
+    public var songsData: Data
+
+    public init(name: String, createdAt: Date, formatMinutes: Int, reordered: Bool, songsData: Data) {
+        self.name = name
+        self.createdAt = createdAt
+        self.formatMinutes = formatMinutes
+        self.reordered = reordered
+        self.songsData = songsData
+    }
+
+    public convenience init(name: String, plan: ClassPlan) throws {
+        let data = try JSONEncoder().encode(plan.songs.map(SavedClassSong.init))
+        self.init(name: name, createdAt: .now, formatMinutes: plan.format.minutes,
+                  reordered: plan.reordered, songsData: data)
+    }
+
+    public var songCount: Int { (try? decodedSongs().count) ?? 0 }
+
+    public func decodedSongs() throws -> [SavedClassSong] {
+        try JSONDecoder().decode([SavedClassSong].self, from: songsData)
+    }
+
+    public func plan() throws -> ClassPlan {
+        ClassPlan(format: ClassFormat(rawValue: formatMinutes) ?? .thirty,
+                  songs: try decodedSongs().map { $0.asPlanned },
+                  reordered: reordered)
+    }
+}
+
 /// Thin persistence helpers over a SwiftData `ModelContext`. `@MainActor` because `ModelContext` is
 /// main-actor bound in app use; tests drive it on the main actor with an in-memory container.
 @MainActor
 public enum SectionMapStore {
 
-    public static let schema = Schema([TrackTempoRecord.self, SectionMapRecord.self, RideLogRecord.self])
+    public static let schema = Schema([TrackTempoRecord.self, SectionMapRecord.self,
+                                       RideLogRecord.self, SavedClassRecord.self])
 
     /// In-memory container for tests / previews.
     public static func inMemoryContainer() throws -> ModelContainer {

@@ -6,6 +6,7 @@ struct SettingsView: View {
     @AppStorage(AppServices.apiKeyDefaultsKey) private var apiKey = ""
     @AppStorage(AppServices.effortDefaultsKey) private var effort = "medium"
     @AppStorage(AppServices.skillDefaultsKey) private var skill = 2
+    @AppStorage(HealthLogger.defaultsKey) private var healthLogging = false
 
     var body: some View {
         List {
@@ -26,6 +27,19 @@ struct SettingsView: View {
             } footer: {
                 Text("Effort biases how hard the choreography pushes; skill gates the advanced moves (corners unlock at 3). Applies to your next ride.")
             }
+
+            #if canImport(HealthKit)
+            Section {
+                Toggle("Save rides to Apple Health", isOn: $healthLogging)
+                    .onChange(of: healthLogging) { _, on in
+                        if on { Task { await HealthLogger.shared.requestAuthorization() } }
+                    }
+            } header: {
+                Text("Apple Health")
+            } footer: {
+                Text("Rides over 2 minutes save as indoor-cycling workouts. Write-only — the app never reads your Health data.")
+            }
+            #endif
 
             Section {
                 SecureField("GetSongBPM API key (override)", text: $apiKey)

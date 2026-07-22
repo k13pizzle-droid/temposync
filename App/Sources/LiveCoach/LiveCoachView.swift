@@ -53,11 +53,21 @@ struct LiveCoachView: View {
     // MARK: Sections
 
     private func header(_ f: LiveFrame) -> some View {
-        HStack(alignment: .top) {
+        HStack(alignment: .top, spacing: 10) {
+            #if canImport(UIKit)
+            if let art = vm.artwork {
+                Image(uiImage: art)
+                    .resizable().aspectRatio(contentMode: .fill)
+                    .frame(width: 44, height: 44)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .shadow(radius: 2)
+            }
+            #endif
             VStack(alignment: .leading, spacing: 2) {
                 Text(f.sectionType?.rawValue.uppercased() ?? "—")
                     .font(.caption).bold().foregroundStyle(.white.opacity(0.7))
                 Text(vm.statusLine).font(.caption2).foregroundStyle(.white.opacity(0.5))
+                    .lineLimit(2)
             }
             Spacer()
             // Cadence chip: the RPM target is what the rider actually holds; BPM is context.

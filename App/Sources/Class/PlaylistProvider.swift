@@ -1,5 +1,8 @@
 import Foundation
 import RhythmCoachCore
+#if canImport(UIKit)
+import UIKit
+#endif
 #if canImport(MediaPlayer)
 import MediaPlayer
 #endif
@@ -17,7 +20,17 @@ protocol PlaylistProvider {
     func songs(in playlistID: String) -> [ClassSong]
     /// Queue the given tracks (by trackKey, in class order) on the system player and start playing.
     func startPlayback(trackKeys: [String])
+    #if canImport(UIKit)
+    /// Album artwork for a track, if the library has it.
+    func artwork(for trackKey: String, side: CGFloat) -> UIImage?
+    #endif
 }
+
+#if canImport(UIKit)
+extension PlaylistProvider {
+    func artwork(for trackKey: String, side: CGFloat) -> UIImage? { nil }
+}
+#endif
 
 #if canImport(MediaPlayer)
 /// Real adapter: `MPMediaQuery` reads Apple Music playlists under the existing media-library
@@ -60,11 +73,29 @@ final class MediaLibraryPlaylistProvider: PlaylistProvider {
     }
 
     func startPlayback(trackKeys: [String]) {
-        let items = trackKeys.compactMap { itemsByKey[$0] }
+        let items = items(forTrackKeys: trackKeys)
         guard !items.isEmpty else { return }
         let player = MPMusicPlayerController.systemMusicPlayer
         player.setQueue(with: MPMediaItemCollection(items: items))
         player.play()
+    }
+
+    /// Resolve items by trackKey — cached from a playlist read, or looked up by persistent ID
+    /// (saved classes start without a prior playlist browse).
+    func items(forTrackKeys keys: [String]) -> [MPMediaItem] {
+        keys.compactMap { key in
+            if let cached = itemsByKey[key] { return cached }
+            guard key.hasPrefix("mp:"), let id = UInt64(key.dropFirst(3)) else { return nil }
+            let query = MPMediaQuery.songs()
+            query.addFilterPredicate(MPMediaPropertyPredicate(value: id, forProperty: MPMediaItemPropertyPersistentID))
+            let item = query.items?.first
+            if let item { itemsByKey[key] = item }
+            return item
+        }
+    }
+
+    func artwork(for trackKey: String, side: CGFloat) -> UIImage? {
+        items(forTrackKeys: [trackKey]).first?.artwork?.image(at: CGSize(width: side, height: side))
     }
 }
 #endif

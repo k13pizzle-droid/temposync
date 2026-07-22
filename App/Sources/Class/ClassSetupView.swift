@@ -1,6 +1,10 @@
 import SwiftUI
+import SwiftData
 import RoutineKit
 import RhythmCoachCore
+#if canImport(UIKit)
+import UIKit
+#endif
 
 /// Build a class from a playlist: pick playlist → duration → reorder toggle → preview the arc →
 /// start (queues the songs on the system player and opens the live ride).
@@ -14,6 +18,9 @@ struct ClassSetupView: View {
     @State private var plan: ClassPlan?
     @State private var roleOverrides: [String: SongRole] = [:]
     @State private var rideStarted = false
+    @State private var showingSave = false
+    @State private var saveName = ""
+    @State private var savedToast: String?
 
     /// The plan with any manual role overrides applied — what actually rides.
     private var effectivePlan: ClassPlan? {
@@ -88,6 +95,7 @@ struct ClassSetupView: View {
                     HStack(spacing: 12) {
                         Text("\(index + 1)").font(.caption).monospacedDigit()
                             .foregroundStyle(.secondary).frame(width: 20)
+                        artworkThumb(planned.song.trackKey)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(planned.song.title).lineLimit(1)
                             Text(planned.song.artist).font(.caption).foregroundStyle(.secondary).lineLimit(1)
@@ -138,6 +146,19 @@ struct ClassSetupView: View {
                         .font(.headline)
                 }
                 .buttonStyle(.borderedProminent)
+
+                Button {
+                    saveName = selectedPlaylist.map { "\($0.name) · \(format.minutes) min" } ?? ""
+                    showingSave = true
+                } label: {
+                    Label(savedToast ?? "Save this class", systemImage: savedToast == nil ? "bookmark" : "checkmark")
+                        .frame(maxWidth: .infinity)
+                }
+                .alert("Name this class", isPresented: $showingSave) {
+                    TextField("Name", text: $saveName)
+                    Button("Save") { saveClass(plan) }
+                    Button("Cancel", role: .cancel) {}
+                }
             } header: {
                 HStack {
                     Text("The ride")
@@ -242,6 +263,38 @@ struct ClassSetupView: View {
         AppServices.activeClassPlan = plan
         provider?.startPlayback(trackKeys: plan.songs.map { $0.song.trackKey })
         rideStarted = true
+    }
+
+    @ViewBuilder
+    private func artworkThumb(_ trackKey: String) -> some View {
+        #if canImport(UIKit)
+        if let image = provider?.artwork(for: trackKey, side: 72) {
+            Image(uiImage: image)
+                .resizable().aspectRatio(contentMode: .fill)
+                .frame(width: 36, height: 36)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+        } else {
+            RoundedRectangle(cornerRadius: 6)
+                .fill(.white.opacity(0.08))
+                .frame(width: 36, height: 36)
+                .overlay(Image(systemName: "music.note").font(.caption).foregroundStyle(.secondary))
+        }
+        #endif
+    }
+
+    /// Upsert by name: re-saving a class with the same name replaces it.
+    private func saveClass(_ plan: ClassPlan) {
+        let name = saveName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return }
+        let descriptor = FetchDescriptor<SavedClassRecord>(predicate: #Predicate { $0.name == name })
+        if let existing = try? AppServices.context.fetch(descriptor).first {
+            AppServices.context.delete(existing)
+        }
+        if let record = try? SavedClassRecord(name: name, plan: plan) {
+            AppServices.context.insert(record)
+            try? AppServices.context.save()
+            savedToast = "Saved \"\(name)\""
+        }
     }
 
     private func modeHView() -> LiveCoachView {

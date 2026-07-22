@@ -1,5 +1,13 @@
 import Foundation
 import RhythmCoachCore
+#if canImport(UIKit)
+import UIKit
+
+/// Anything that can supply the current track's album artwork.
+protocol ArtworkProviding {
+    func currentArtwork(side: CGFloat) -> UIImage?
+}
+#endif
 #if canImport(MediaPlayer)
 import MediaPlayer
 
@@ -32,5 +40,11 @@ final class NowPlayingSourceMP: NowPlayingSource, PlaybackControls, @unchecked S
     func nextTrack() { player.skipToNextItem() }
     func previousTrack() { player.skipToPreviousItem() }
     func seek(to seconds: Double) { player.currentPlaybackTime = max(0, seconds) }
+}
+
+extension NowPlayingSourceMP: ArtworkProviding {
+    func currentArtwork(side: CGFloat) -> UIImage? {
+        player.nowPlayingItem?.artwork?.image(at: CGSize(width: side, height: side))
+    }
 }
 #endif

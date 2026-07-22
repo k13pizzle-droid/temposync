@@ -40,6 +40,10 @@ targets:
     platform: iOS
     sources:
       - path: Sources
+    entitlements:
+      path: TempoSync.entitlements
+      properties:
+        com.apple.developer.healthkit: true
     info:
       path: Info.plist
       properties:
@@ -58,6 +62,10 @@ targets:
           Nothing is recorded or uploaded — only beat and energy features are computed on-device.
         NSAppleMusicUsageDescription: >-
           TempoSync reads what's currently playing so it can line up coaching cues with the track.
+        NSHealthUpdateUsageDescription: >-
+          TempoSync saves your completed rides to Apple Health as indoor-cycling workouts.
+        NSHealthShareUsageDescription: >-
+          TempoSync only writes workouts; it never reads your Health data.
     dependencies:
       - package: RoutineKit
       - package: BeatKit

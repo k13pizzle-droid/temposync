@@ -1,5 +1,8 @@
 import Foundation
 import QuartzCore
+#if canImport(UIKit)
+import UIKit
+#endif
 import RoutineKit
 import BeatKit
 import RhythmCoachCore
@@ -82,6 +85,16 @@ final class LiveCoachViewModel: ObservableObject {
     private var currentInfo: NowPlayingInfo?
     private var waterfall: BPMWaterfall?
     @Published private(set) var isPlayingNow = true
+    #if canImport(UIKit)
+    /// Album artwork for the current track (Apple Music library art via MPMediaItem).
+    @Published private(set) var artwork: UIImage? = nil
+    #endif
+
+    private func refreshArtwork() {
+        #if canImport(UIKit)
+        artwork = (nowPlayingSource as? ArtworkProviding)?.currentArtwork(side: 240)
+        #endif
+    }
 
     // Ride-history bookkeeping.
     private var sessionStart: Date?
@@ -94,22 +107,35 @@ final class LiveCoachViewModel: ObservableObject {
     private var lastWatchResistance = false
     private var lastWatchCountdown: String?
 
+    // Ride telemetry (feeds the end-of-ride summary).
+    private var sprintSeconds = 0
+    private var movesRidden: [String] = []
+
     private func startWatchCues() {
-        #if canImport(WatchConnectivity)
         watchTask?.cancel()
         lastWatchMove = ""; lastWatchResistance = false; lastWatchCountdown = nil
+        sprintSeconds = 0; movesRidden = []
         watchTask = Task { @MainActor in
             while !Task.isCancelled && isRunning {
                 try? await Task.sleep(for: .seconds(1))
-                pushWatchState()
+                let frame = currentFrame()
+                collectTelemetry(frame)
+                pushWatchState(frame)
             }
         }
-        #endif
     }
 
-    private func pushWatchState() {
+    private func collectTelemetry(_ frame: LiveFrame) {
+        guard frame.bpm > 0 else { return }
+        if frame.currentIntensity == .peak { sprintSeconds += 1 }
+        if frame.currentMoveName != "—", movesRidden.last != frame.currentMoveName,
+           !movesRidden.contains(frame.currentMoveName) {
+            movesRidden.append(frame.currentMoveName)
+        }
+    }
+
+    private func pushWatchState(_ frame: LiveFrame) {
         #if canImport(WatchConnectivity)
-        let frame = currentFrame()
         guard frame.bpm > 0 else { return }
         if frame.currentMoveName != lastWatchMove, frame.currentMoveName != "—" {
             lastWatchMove = frame.currentMoveName
@@ -165,19 +191,37 @@ final class LiveCoachViewModel: ObservableObject {
                         currentInfo = nil
                         coach = nil
                         hasContent = false
+                        refreshArtwork()
                         statusLine = "Nothing playing"
                     }
                     continue
                 }
 
+                let measured = source.currentTime()
+
+                // Seek grace: MPMusicPlayerController applies seeks LAZILY — right after a scrub the
+                // player still reports the old position for a beat, and snapping to it made the
+                // scrubber jump backward then forward. Until the player confirms the seek (or the
+                // grace expires), stale positions are ignored.
+                if let grace = seekGrace {
+                    if abs(measured - grace.target) < 1.5 {
+                        seekGrace = nil
+                        playbackAnchor = (measured, now())      // seek landed — adopt it
+                        continue
+                    } else if now() < grace.until {
+                        continue                                 // stale pre-seek position — ignore
+                    } else {
+                        seekGrace = nil                          // seek never landed — resume normal
+                    }
+                }
+
                 // Paused → hold the anchor at the measured position (frozen pulse, honest scrubber).
                 guard playing else {
-                    playbackAnchor = (source.currentTime(), now())
+                    playbackAnchor = (measured, now())
                     continue
                 }
 
                 // Anchor smoothing: snap on a scrub, micro-correct otherwise (no judder).
-                let measured = source.currentTime()
                 guard let anchor = playbackAnchor else { continue }
                 let expected = anchor.position + (now() - anchor.wall)
                 let error = measured - expected
@@ -206,12 +250,15 @@ final class LiveCoachViewModel: ObservableObject {
         scrub(to: playbackPosition + seconds)
     }
 
+    private var seekGrace: (target: Double, until: Double)?
+
     /// Seek absolute — used by the scrubber on drag end.
     func scrub(to seconds: Double) {
         guard let controls else { return }
         let clamped = min(max(seconds, 0), max(playbackDuration - 1, 0))
         controls.seek(to: clamped)
-        playbackAnchor = (clamped, now())          // snap immediately; poll reconciles after
+        playbackAnchor = (clamped, now())              // optimistic: pulse moves immediately
+        seekGrace = (clamped, now() + 2.0)             // ignore stale positions until seek lands
     }
 
     /// (Re)build the routine for a track: learned SectionMap if one exists, BPM via the waterfall
@@ -220,7 +267,9 @@ final class LiveCoachViewModel: ObservableObject {
         currentTrackKey = info.trackKey
         currentInfo = info
         songsSeen += 1
+        seekGrace = nil
         playbackAnchor = (nowPlayingSource?.currentTime() ?? 0, now())
+        refreshArtwork()
 
         let learnedMap = try? SectionMapStore.map(for: info.trackKey, in: AppServices.context)
         let local = waterfall?.resolveLocally(title: info.title, artist: info.artist)
@@ -373,7 +422,7 @@ final class LiveCoachViewModel: ObservableObject {
     }
 
     func stop() {
-        // Log rides over 2 minutes to history before tearing the session down.
+        // Log rides over 2 minutes: history record + end-of-ride summary + optional Health workout.
         if let start = sessionStart {
             let elapsed = Date.now.timeIntervalSince(start)
             if elapsed > 120 {
@@ -386,6 +435,20 @@ final class LiveCoachViewModel: ObservableObject {
                 )
                 AppServices.context.insert(record)
                 try? AppServices.context.save()
+
+                var healthLogged = false
+                #if canImport(HealthKit)
+                healthLogged = HealthLogger.shared.enabled
+                let end = Date.now
+                Task { await HealthLogger.shared.logRide(start: start, end: end) }
+                #endif
+
+                SummaryCenter.shared.pending = RideSummary(
+                    date: start, minutes: elapsed / 60, songs: songsSeen,
+                    moves: movesRidden, sprintSeconds: sprintSeconds,
+                    formatMinutes: AppServices.activeClassPlan?.format.minutes,
+                    healthLogged: healthLogged
+                )
             }
         }
         sessionStart = nil
@@ -404,6 +467,7 @@ final class LiveCoachViewModel: ObservableObject {
         knownBPM = nil
         recentRawBPMs.removeAll()
         playbackAnchor = nil
+        seekGrace = nil
         nowPlayingSource = nil
         controls = nil
         currentTrackKey = nil
@@ -413,6 +477,9 @@ final class LiveCoachViewModel: ObservableObject {
         modeSState = nil
         coach = nil
         hasContent = false
+        #if canImport(UIKit)
+        artwork = nil
+        #endif
         statusLine = "Stopped"
     }
 }
