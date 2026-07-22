@@ -132,10 +132,17 @@ public final class SavedClassRecord {
                   reordered: plan.reordered, songsData: data)
     }
 
+    /// Decode memo — `songsData` never mutates after creation (records are replaced wholesale),
+    /// and List rows read `songCount`/`decodedSongs()` on every render.
+    @Transient private var cachedSongs: [SavedClassSong]? = nil
+
     public var songCount: Int { (try? decodedSongs().count) ?? 0 }
 
     public func decodedSongs() throws -> [SavedClassSong] {
-        try JSONDecoder().decode([SavedClassSong].self, from: songsData)
+        if let cachedSongs { return cachedSongs }
+        let songs = try JSONDecoder().decode([SavedClassSong].self, from: songsData)
+        cachedSongs = songs
+        return songs
     }
 
     public func plan() throws -> ClassPlan {
@@ -184,5 +191,12 @@ public enum SectionMapStore {
         try context.fetch(
             FetchDescriptor<SectionMapRecord>(predicate: #Predicate { $0.trackKey == trackKey })
         ).first?.asCapturedMap
+    }
+
+    /// Every learned map, keyed by track — one fetch for screens that need per-song lookups
+    /// (class plan fitting, storyboards, pickers), instead of a store round-trip per song.
+    public static func allMaps(in context: ModelContext) throws -> [String: CapturedMap] {
+        let records = try context.fetch(FetchDescriptor<SectionMapRecord>())
+        return Dictionary(uniqueKeysWithValues: records.map { ($0.trackKey, $0.asCapturedMap) })
     }
 }

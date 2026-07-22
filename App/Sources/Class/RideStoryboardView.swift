@@ -17,6 +17,10 @@ struct RideStoryboardView: View {
         let blocks: [(name: String, seconds: Int)]
     }
 
+    /// Computed once on appear — as a computed property this regenerated every song's full routine
+    /// (plus a SwiftData fetch each) on every body evaluation. The plan is immutable.
+    @State private var boards: [SongBoard] = []
+
     var body: some View {
         List {
             ForEach(boards) { board in
@@ -46,14 +50,17 @@ struct RideStoryboardView: View {
             }
         }
         .navigationTitle("Ride preview")
+        .onAppear { if boards.isEmpty { boards = buildBoards() } }
     }
 
-    private var boards: [SongBoard] {
-        plan.songs.map { planned in
+    private func buildBoards() -> [SongBoard] {
+        // One fetch for every learned map, instead of a store round-trip per song.
+        let learnedMaps = (try? SectionMapStore.allMaps(in: AppServices.context)) ?? [:]
+        return plan.songs.map { planned in
             let song = planned.song
             let bpm: Double
             let sections: [RoutineKit.Section]
-            let learnedMap = try? SectionMapStore.map(for: song.trackKey, in: AppServices.context)
+            let learnedMap = learnedMaps[song.trackKey]
             if let learnedMap {
                 bpm = learnedMap.bpm
                 sections = learnedMap.sections

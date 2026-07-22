@@ -13,13 +13,17 @@ struct LibraryPickerView: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var allSongs: [ClassSong] = []
+    /// Lowercased "title artist" per song, built once — filtering used to re-lowercase every song
+    /// on every keystroke AND every selection toggle (body re-eval).
+    @State private var haystacks: [String] = []
+    @State private var learnedKeys: Set<String> = []
     @State private var selection: Set<String> = []
     @State private var query = ""
 
     private var filtered: [ClassSong] {
         guard !query.isEmpty else { return allSongs }
         let q = query.lowercased()
-        return allSongs.filter { $0.title.lowercased().contains(q) || $0.artist.lowercased().contains(q) }
+        return zip(allSongs, haystacks).filter { $0.1.contains(q) }.map { $0.0 }
     }
 
     var body: some View {
@@ -46,7 +50,7 @@ struct LibraryPickerView: View {
                                     .foregroundStyle(.secondary).lineLimit(1)
                             }
                             Spacer()
-                            if AppServices.hasLearnedMap(song.trackKey) {
+                            if learnedKeys.contains(song.trackKey) {
                                 Image(systemName: "waveform.badge.checkmark")
                                     .font(.system(size: 11)).foregroundStyle(.green)
                             }
@@ -75,6 +79,9 @@ struct LibraryPickerView: View {
         }
         .onAppear {
             allSongs = provider?.allSongs() ?? []
+            haystacks = allSongs.map { "\($0.title.lowercased()) \($0.artist.lowercased())" }
+            // One fetch for the badges — a per-row store lookup ran on every body evaluation.
+            learnedKeys = Set(AppServices.learnedEnergyIndex().keys)
             selection = initialSelection
         }
     }
@@ -90,17 +97,7 @@ struct LibraryPickerView: View {
     @ViewBuilder
     private func thumb(_ trackKey: String) -> some View {
         #if canImport(UIKit)
-        if let image = provider?.artwork(for: trackKey, side: 72) {
-            Image(uiImage: image)
-                .resizable().aspectRatio(contentMode: .fill)
-                .frame(width: 36, height: 36)
-                .clipShape(RoundedRectangle(cornerRadius: 6))
-        } else {
-            RoundedRectangle(cornerRadius: 6)
-                .fill(.white.opacity(0.08))
-                .frame(width: 36, height: 36)
-                .overlay(Image(systemName: "music.note").font(.caption).foregroundStyle(.secondary))
-        }
+        ArtworkThumb(trackKey: trackKey, provider: provider)
         #endif
     }
 }

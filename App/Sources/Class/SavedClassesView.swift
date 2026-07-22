@@ -91,16 +91,16 @@ struct SavedClassesView: View {
     private func start(_ record: SavedClassRecord) {
         guard let plan = try? record.plan() else { return }
         AppServices.activeClassPlan = plan
-        makePlaylistProvider().startPlayback(trackKeys: plan.songs.map { $0.song.trackKey })
+        AppServices.sharedProvider.startPlayback(trackKeys: plan.songs.map { $0.song.trackKey })
         rideStarted = true
     }
 
-    /// 2×2 artwork collage from the class's first four songs.
+    /// 2×2 artwork collage from the class's first four songs (async cache-backed cells — this used
+    /// to decode up to four images synchronously per row per render).
     @ViewBuilder
     private func collage(_ record: SavedClassRecord) -> some View {
         let keys = (try? record.decodedSongs().prefix(4).map { $0.trackKey }) ?? []
-        let images = keys.compactMap { AppServices.sharedProvider.artwork(for: $0, side: 44) }
-        if images.isEmpty {
+        if keys.isEmpty {
             RoundedRectangle(cornerRadius: 8)
                 .fill(.white.opacity(0.08))
                 .frame(width: 44, height: 44)
@@ -109,9 +109,9 @@ struct SavedClassesView: View {
             let columns = [GridItem(.flexible(), spacing: 1), GridItem(.flexible(), spacing: 1)]
             LazyVGrid(columns: columns, spacing: 1) {
                 ForEach(0..<4, id: \.self) { i in
-                    if i < images.count {
-                        Image(uiImage: images[i]).resizable().aspectRatio(contentMode: .fill)
-                            .frame(width: 21, height: 21).clipped()
+                    if i < keys.count {
+                        ArtworkThumb(trackKey: keys[i], provider: AppServices.sharedProvider,
+                                     size: 21, querySide: 44, cornerRadius: 0)
                     } else {
                         Color.white.opacity(0.06).frame(width: 21, height: 21)
                     }

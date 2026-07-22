@@ -28,6 +28,7 @@ struct ClassSetupView: View {
     @State private var difficulty: ClassDifficulty = AppServices.difficulty
     @State private var style: ClassStyle = .standard
     @State private var learnedKeys: Set<String> = []
+    @State private var resolveTask: Task<Void, Never>?
 
     /// The plan with any manual role overrides applied — what actually rides.
     private var effectivePlan: ClassPlan? {
@@ -292,7 +293,7 @@ struct ClassSetupView: View {
             playlists = []
             return
         }
-        let p = makePlaylistProvider()
+        let p = AppServices.sharedProvider
         provider = p
         playlists = p.playlists()
         // One playlist → no reason to make the rider tap it.
@@ -310,7 +311,10 @@ struct ClassSetupView: View {
         rebuildPlan()
     }
 
-    /// Fill in missing BPMs: seed/cache immediately, API asynchronously (plan refreshes as they land).
+    /// Fill in missing BPMs: seed/cache immediately, then ONE serial background pass (each song can
+    /// decode real audio — the old one-Task-per-song fan-out ran a 60-song playlist as 60 concurrent
+    /// decodes), with the plan re-fitting at most every 1.5 s while results land instead of once
+    /// per song. Re-selecting a source cancels and restarts the pass.
     private func resolveBPMs() {
         let waterfall = AppServices.makeBPMWaterfall()
         // Local rungs, synchronous.
@@ -320,20 +324,33 @@ struct ClassSetupView: View {
             return ClassSong(trackKey: song.trackKey, title: song.title, artist: song.artist,
                              durationSeconds: song.durationSeconds, bpm: hit.bpm)
         }
-        // In-house analysis of each track's own audio first (no network); API rungs only for
-        // streamed-only tracks. Results cache forever either way.
-        for song in songs where song.bpm == nil {
-            Task { @MainActor in
+        let pending = songs.filter { $0.bpm == nil }
+        resolveTask?.cancel()
+        guard !pending.isEmpty else { return }
+
+        resolveTask = Task { @MainActor in
+            var lastReplan = Date.now
+            var dirty = false
+            for song in pending {
+                guard !Task.isCancelled else { return }
                 var bpm = await AppServices.onDeviceBPM(trackKey: song.trackKey, title: song.title,
                                                         artist: song.artist)
                 if bpm == nil {
                     bpm = await waterfall.resolve(title: song.title, artist: song.artist)?.bpm
                 }
-                guard let bpm, let idx = songs.firstIndex(where: { $0.trackKey == song.trackKey }) else { return }
-                songs[idx] = ClassSong(trackKey: song.trackKey, title: song.title, artist: song.artist,
-                                       durationSeconds: song.durationSeconds, bpm: bpm)
-                rebuildPlan()
+                if let bpm, let idx = songs.firstIndex(where: { $0.trackKey == song.trackKey }) {
+                    let s = songs[idx]
+                    songs[idx] = ClassSong(trackKey: s.trackKey, title: s.title, artist: s.artist,
+                                           durationSeconds: s.durationSeconds, bpm: bpm)
+                    dirty = true
+                }
+                if dirty, Date.now.timeIntervalSince(lastReplan) > 1.5 {
+                    rebuildPlan()
+                    lastReplan = .now
+                    dirty = false
+                }
             }
+            if dirty, !Task.isCancelled { rebuildPlan() }
         }
     }
 
@@ -341,11 +358,13 @@ struct ClassSetupView: View {
 
     private func rebuildPlan() {
         // Enrich with learned data: measured energy sharpens role fitting; badges show coverage.
-        learnedKeys = Set(songs.map { $0.trackKey }.filter { AppServices.hasLearnedMap($0) })
+        // ONE store fetch per rebuild — this used to round-trip SwiftData twice per song.
+        let learned = AppServices.learnedEnergyIndex()
+        learnedKeys = Set(songs.map { $0.trackKey }.filter { learned[$0] != nil })
         let pool = includedSongs.map { song in
             ClassSong(trackKey: song.trackKey, title: song.title, artist: song.artist,
                       durationSeconds: song.durationSeconds, bpm: song.bpm,
-                      energy: AppServices.learnedEnergy(song.trackKey))
+                      energy: learned[song.trackKey])
         }
         guard pool.count >= 2 else { plan = nil; return }
         plan = ClassPlanner().plan(songs: pool, format: format, reorder: reorder, style: style)
@@ -380,17 +399,7 @@ struct ClassSetupView: View {
     @ViewBuilder
     private func artworkThumb(_ trackKey: String) -> some View {
         #if canImport(UIKit)
-        if let image = provider?.artwork(for: trackKey, side: 72) {
-            Image(uiImage: image)
-                .resizable().aspectRatio(contentMode: .fill)
-                .frame(width: 36, height: 36)
-                .clipShape(RoundedRectangle(cornerRadius: 6))
-        } else {
-            RoundedRectangle(cornerRadius: 6)
-                .fill(.white.opacity(0.08))
-                .frame(width: 36, height: 36)
-                .overlay(Image(systemName: "music.note").font(.caption).foregroundStyle(.secondary))
-        }
+        ArtworkThumb(trackKey: trackKey, provider: provider)
         #endif
     }
 

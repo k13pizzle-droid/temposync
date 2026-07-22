@@ -21,8 +21,17 @@ enum AppServices {
 
     static var context: ModelContext { container.mainContext }
 
-    /// Shared library access for cross-screen lookups (asset URLs, artwork).
-    static let sharedProvider: PlaylistProvider = makePlaylistProvider()
+    /// Shared library access for cross-screen lookups (asset URLs, artwork). ONE provider for the
+    /// whole app — per-screen factories each re-ran a full library query and kept isolated item
+    /// caches. While the choice is stuck on the fixture provider (permission not yet granted, or
+    /// library empty at first touch), the next access retries the real library once more.
+    static var sharedProvider: PlaylistProvider {
+        if let provider = _provider, !(provider is PreviewPlaylistProvider) { return provider }
+        let fresh = makePlaylistProvider()
+        if _provider == nil || !(fresh is PreviewPlaylistProvider) { _provider = fresh }
+        return _provider!
+    }
+    private static var _provider: PlaylistProvider?
 
     /// IN-HOUSE tempo rung: analyze the track's own audio file with BeatKit (no mic, no network).
     /// Works for downloaded/purchased/DRM-free items; streamed-only tracks return nil and fall
@@ -56,8 +65,18 @@ enum AppServices {
 
     /// Duration-weighted mean energy from a learned map; nil when the track has no map.
     static func learnedEnergy(_ trackKey: String) -> Double? {
-        guard let map = try? SectionMapStore.map(for: trackKey, in: context), !map.sections.isEmpty
-        else { return nil }
+        guard let map = try? SectionMapStore.map(for: trackKey, in: context) else { return nil }
+        return Self.energy(of: map)
+    }
+
+    /// Learned-map energy for EVERY learned track in one fetch — plan rebuilds and pickers used to
+    /// round-trip the store twice per song per rebuild.
+    static func learnedEnergyIndex() -> [String: Double] {
+        ((try? SectionMapStore.allMaps(in: context)) ?? [:]).compactMapValues(Self.energy(of:))
+    }
+
+    private static func energy(of map: CapturedMap) -> Double? {
+        guard !map.sections.isEmpty else { return nil }
         let totalCounts = map.sections.reduce(0) { $0 + $1.counts }
         guard totalCounts > 0 else { return nil }
         let weighted = map.sections.reduce(0.0) { $0 + $1.energy * Double($1.counts) }

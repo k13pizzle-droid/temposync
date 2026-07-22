@@ -15,7 +15,8 @@ struct PlaylistSummary: Identifiable, Hashable {
 
 /// Reads the user's playlists and starts class playback. Backed by the media library on device;
 /// a fixture provider stands in on the simulator (no library there).
-protocol PlaylistProvider {
+/// Sendable so artwork/asset lookups can run off the main thread (see ArtworkStore).
+protocol PlaylistProvider: Sendable {
     func playlists() -> [PlaylistSummary]
     func songs(in playlistID: String) -> [ClassSong]
     /// Queue the given tracks (by trackKey, in class order) on the system player and start playing.
@@ -46,20 +47,53 @@ extension PlaylistProvider {
 /// Real adapter: `MPMediaQuery` reads Apple Music playlists under the existing media-library
 /// permission (no MusicKit entitlement needed); playback queues on the same system player the
 /// transport bar already controls.
-final class MediaLibraryPlaylistProvider: PlaylistProvider {
+final class MediaLibraryPlaylistProvider: PlaylistProvider, @unchecked Sendable {
+    // Guarded by `lock`: item lookups run off-main for artwork loads (ArtworkStore).
+    private let lock = NSLock()
     private var itemsByKey: [String: MPMediaItem] = [:]
+    private var cachedCollections: [MPMediaPlaylist]?
+    private var changeObserver: (any NSObjectProtocol)?
 
     init() {
         // Fire-and-forget authorization; first open may show the permission prompt.
         if MPMediaLibrary.authorizationStatus() == .notDetermined {
             MPMediaLibrary.requestAuthorization { _ in }
         }
+        // Library queries are expensive main-thread media-store work — cache the collections and
+        // invalidate only when the library actually changes.
+        MPMediaLibrary.default().beginGeneratingLibraryChangeNotifications()
+        changeObserver = NotificationCenter.default.addObserver(
+            forName: .MPMediaLibraryDidChange, object: nil, queue: nil
+        ) { [weak self] _ in
+            guard let self else { return }
+            self.lock.lock()
+            self.cachedCollections = nil
+            self.itemsByKey.removeAll()
+            self.lock.unlock()
+        }
+    }
+
+    deinit {
+        if let changeObserver { NotificationCenter.default.removeObserver(changeObserver) }
+        MPMediaLibrary.default().endGeneratingLibraryChangeNotifications()
+    }
+
+    private func collections() -> [MPMediaPlaylist] {
+        lock.lock()
+        if let cachedCollections {
+            lock.unlock()
+            return cachedCollections
+        }
+        lock.unlock()
+        let fresh = (MPMediaQuery.playlists().collections ?? []).compactMap { $0 as? MPMediaPlaylist }
+        lock.lock()
+        cachedCollections = fresh
+        lock.unlock()
+        return fresh
     }
 
     func playlists() -> [PlaylistSummary] {
-        let collections = MPMediaQuery.playlists().collections ?? []
-        return collections.compactMap { collection in
-            guard let playlist = collection as? MPMediaPlaylist else { return nil }
+        collections().map { playlist in
             let name = (playlist.value(forProperty: MPMediaPlaylistPropertyName) as? String) ?? "Playlist"
             return PlaylistSummary(id: String(playlist.persistentID), name: name,
                                    songCount: playlist.items.count)
@@ -67,13 +101,11 @@ final class MediaLibraryPlaylistProvider: PlaylistProvider {
     }
 
     func songs(in playlistID: String) -> [ClassSong] {
-        let collections = MPMediaQuery.playlists().collections ?? []
-        guard let playlist = collections.first(where: {
-            String(($0 as? MPMediaPlaylist)?.persistentID ?? 0) == playlistID
-        }) else { return [] }
+        guard let playlist = collections().first(where: { String($0.persistentID) == playlistID })
+        else { return [] }
         return playlist.items.map { item in
             let key = "mp:\(item.persistentID)"
-            itemsByKey[key] = item
+            cache(item, forKey: key)
             return ClassSong(trackKey: key,
                              title: item.title ?? "Unknown",
                              artist: item.artist ?? "Unknown",
@@ -94,14 +126,23 @@ final class MediaLibraryPlaylistProvider: PlaylistProvider {
     /// (saved classes start without a prior playlist browse).
     func items(forTrackKeys keys: [String]) -> [MPMediaItem] {
         keys.compactMap { key in
-            if let cached = itemsByKey[key] { return cached }
+            lock.lock()
+            let cached = itemsByKey[key]
+            lock.unlock()
+            if let cached { return cached }
             guard key.hasPrefix("mp:"), let id = UInt64(key.dropFirst(3)) else { return nil }
             let query = MPMediaQuery.songs()
             query.addFilterPredicate(MPMediaPropertyPredicate(value: id, forProperty: MPMediaItemPropertyPersistentID))
             let item = query.items?.first
-            if let item { itemsByKey[key] = item }
+            if let item { cache(item, forKey: key) }
             return item
         }
+    }
+
+    private func cache(_ item: MPMediaItem, forKey key: String) {
+        lock.lock()
+        itemsByKey[key] = item
+        lock.unlock()
     }
 
     func artwork(for trackKey: String, side: CGFloat) -> UIImage? {
@@ -113,12 +154,12 @@ final class MediaLibraryPlaylistProvider: PlaylistProvider {
     }
 
     func allSongs() -> [ClassSong] {
+        // Deliberately does NOT warm itemsByKey: a full library scan used to pin an MPMediaItem
+        // per song in the shared provider forever. Item lookups cache lazily, on demand.
         var seen = Set<UInt64>()
         return (MPMediaQuery.songs().items ?? []).compactMap { item in
             guard seen.insert(item.persistentID).inserted else { return nil }
-            let key = "mp:\(item.persistentID)"
-            itemsByKey[key] = item
-            return ClassSong(trackKey: key, title: item.title ?? "Unknown",
+            return ClassSong(trackKey: "mp:\(item.persistentID)", title: item.title ?? "Unknown",
                              artist: item.artist ?? "Unknown",
                              durationSeconds: item.playbackDuration, bpm: nil)
         }
@@ -126,8 +167,8 @@ final class MediaLibraryPlaylistProvider: PlaylistProvider {
 }
 #endif
 
-/// Simulator / preview stand-in: Kevin's fixture set as a fake playlist. Playback is a no-op.
-final class PreviewPlaylistProvider: PlaylistProvider {
+/// Simulator / preview stand-in: fixture set as a fake playlist. Playback is a no-op.
+final class PreviewPlaylistProvider: PlaylistProvider, Sendable {
     func playlists() -> [PlaylistSummary] {
         [PlaylistSummary(id: "fixtures", name: "Spin Fixtures (demo)", songCount: RealTrackFixturesSongs.count)]
     }

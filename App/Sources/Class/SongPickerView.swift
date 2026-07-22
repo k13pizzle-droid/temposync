@@ -65,17 +65,7 @@ struct SongPickerView: View {
     @ViewBuilder
     private func thumb(_ trackKey: String) -> some View {
         #if canImport(UIKit)
-        if let image = provider?.artwork(for: trackKey, side: 72) {
-            Image(uiImage: image)
-                .resizable().aspectRatio(contentMode: .fill)
-                .frame(width: 36, height: 36)
-                .clipShape(RoundedRectangle(cornerRadius: 6))
-        } else {
-            RoundedRectangle(cornerRadius: 6)
-                .fill(.white.opacity(0.08))
-                .frame(width: 36, height: 36)
-                .overlay(Image(systemName: "music.note").font(.caption).foregroundStyle(.secondary))
-        }
+        ArtworkThumb(trackKey: trackKey, provider: provider)
         #endif
     }
 }

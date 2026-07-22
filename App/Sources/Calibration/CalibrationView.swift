@@ -97,7 +97,7 @@ struct CalibrationView: View {
         }
         .navigationTitle("Calibrate")
         .onAppear {
-            let p = makePlaylistProvider()
+            let p = AppServices.sharedProvider
             provider = p
             playlists = p.playlists()
             if playlists.count == 1 { selectedPlaylist = playlists[0]; songs = p.songs(in: playlists[0].id) }
