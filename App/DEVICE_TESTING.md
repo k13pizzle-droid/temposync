@@ -53,8 +53,29 @@ track-skip pickup feels fast enough.
 
 ---
 
-## Setup (unchanged)
+## Setup
 ```bash
-cd App && xcodegen generate && open TempoSync.xcodeproj
+cd App && ./generate.sh && open TempoSync.xcodeproj
 ```
-Signing & Capabilities → your Team → ⌘R. (Free Apple ID builds expire weekly — re-run ⌘R.)
+`generate.sh` regenerates the project and keeps your signing team: it lives in
+`App/Signing.xcconfig` (gitignored, created on first run). Set it once —
+
+```
+DEVELOPMENT_TEAM = XXXXXXXXXX      # Xcode → Settings → Accounts → Team ID
+```
+
+— and you never have to touch Signing & Capabilities again, on any target, after any
+regeneration. Then ⌘R. (Free Apple ID builds expire weekly — just re-run ⌘R.)
+
+### Running on the iPhone + Watch
+- **Scheme must be `TempoSync`**, destination your iPhone. Selecting `TempoSyncWidgets`
+  runs the widget-extension debug flow instead and fails with a `SendProcessControlEvent`
+  / "Failed to show Widget" error.
+- **Unlock the phone before ⌘R.** A locked device refuses the launch request
+  ("Unable to launch because the device was not, or could not be, unlocked").
+- The watch app installs automatically with the phone app (it's embedded). Keep the Watch
+  unlocked and near the phone; first install can take a couple of minutes.
+- To debug the watch app itself, switch the scheme to `TempoSyncWatch` and pick the Watch
+  as the destination.
+- Terminal builds: **never pass `-sdk iphonesimulator`** with the embedded watch target —
+  use `-destination` only, or the watch app tries to build against the iOS SDK.

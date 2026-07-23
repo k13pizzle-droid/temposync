@@ -9,6 +9,8 @@ App/TempoSync.xcodeproj/
 App/Info.plist
 # Real API keys live here — never commit.
 App/Sources/Secrets.swift
+# Local signing team (see App/Signing.example.xcconfig).
+App/Signing.xcconfig
 # Local build products (xcodebuild -derivedDataPath ./build)
 App/build/
 App/WatchApp/Info.plist

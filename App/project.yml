@@ -5,6 +5,13 @@ options:
     iOS: "17.0"
   createIntermediateGroups: true
 
+# Signing team lives in a gitignored local file so regenerating the project never wipes it
+# (and the ID stays out of the public repo). Fresh clone: copy Signing.example.xcconfig
+# to Signing.xcconfig and fill in your team ID. Missing file = unsigned builds, simulator only.
+configFiles:
+  Debug: Signing.xcconfig
+  Release: Signing.xcconfig
+
 packages:
   RoutineKit:
     path: ../Packages/RoutineKit

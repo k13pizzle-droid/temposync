@@ -131,8 +131,10 @@ iOS 17+ simulator.
 
 ```bash
 cd App
-xcodegen generate
-xcodebuild -project TempoSync.xcodeproj -scheme TempoSync -sdk iphonesimulator \
+./generate.sh          # regenerates the project; keeps your signing team (Signing.xcconfig)
+# NOTE: -destination only — never add `-sdk iphonesimulator`, which forces the embedded
+# watchOS target onto the iOS SDK and fails with "WatchKit unresolved".
+xcodebuild -project TempoSync.xcodeproj -scheme TempoSync \
   -destination 'platform=iOS Simulator,name=iPhone 17' build
 # Launch straight into the live demo (no mic needed):
 #   SIMCTL_CHILD_TEMPOSYNC_DEMO=1 xcrun simctl launch <booted-device> com.pizzmusic.TempoSync

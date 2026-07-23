@@ -1,0 +1,6 @@
+// Template. Copy to Signing.xcconfig (gitignored) and put YOUR team ID in it:
+//     cp App/Signing.example.xcconfig App/Signing.xcconfig
+// Find your team ID: Xcode → Settings → Accounts → your Apple ID → Team ID column.
+// Without it, targets build unsigned (simulator is fine) and you must pick a team
+// by hand in Signing & Capabilities after every `xcodegen generate`.
+DEVELOPMENT_TEAM =
