@@ -8,8 +8,13 @@ import Foundation
 public enum Grammar {
 
     public static let dwellMinimum = 8
-    public static let densityWindow = 64      // 2 phrases
     public static let leadLegSpacing = 64     // ~2 phrases
+
+    /// Longest CONTINUOUS stretch of upper-body work before the ride must return to the legs.
+    /// 32 counts ≈ 15 s ≈ 8 push-ups at 128 BPM — an instructor's set, not an arm workout.
+    public static let maxUpperBodyRun = 32
+    /// Legs-only counts required after an upper-body run before the next one.
+    public static let minUpperBodyGap = 16
 
     // MARK: Rule 1 — boundary alignment & no 2-counts
 
@@ -59,14 +64,39 @@ public enum Grammar {
     }
 
     // MARK: Rule 5 — upper-body density cap
+    //
+    // Spec amendment (2026-07-23, Kevin's choreography feedback): the original rule required every
+    // pair of upper-body blocks to start ≥64 counts apart, which made SUSTAINED choreography
+    // structurally illegal — push-ups and press-downs could only ever appear as one 16-count stab
+    // (~7 s), while in a real SoulCycle/Peloton-style class a tap-back or push-up sequence is
+    // routinely a song's main event. The cap now limits how long the rider works the upper body
+    // CONTINUOUSLY, and demands legs in between, instead of forbidding repetition:
+    //   · a continuous upper-body run may not exceed `maxUpperBodyRun`
+    //   · consecutive runs are separated by ≥ `minUpperBodyGap` counts of leg work
+    // Sustained choreography is now expressed as alternating sets ("8 push-ups, back to the beat"),
+    // which is both what instructors actually cue and what keeps the legs turning.
 
     public static func checkDensityCap(_ events: [MoveEvent]) -> [String] {
-        let upperStarts = events.filter { $0.move.upperBody }.map { $0.startCount }.sorted()
+        let sorted = events.sorted { $0.startCount < $1.startCount }
         var problems: [String] = []
-        for i in 1..<max(upperStarts.count, 1) where upperStarts.count > 1 {
-            let gap = upperStarts[i] - upperStarts[i - 1]
-            if gap < densityWindow {
-                problems.append("Upper-body blocks at \(upperStarts[i-1]) and \(upperStarts[i]) are \(gap) counts apart (< \(densityWindow))")
+
+        // Merge contiguous upper-body events into runs (tiled blocks of the same set are one run).
+        var runs: [(start: Int, end: Int)] = []
+        for event in sorted where event.move.upperBody {
+            if let last = runs.last, event.startCount <= last.end {
+                runs[runs.count - 1].end = max(last.end, event.endCount)
+            } else {
+                runs.append((event.startCount, event.endCount))
+            }
+        }
+
+        for run in runs where run.end - run.start > maxUpperBodyRun {
+            problems.append("Upper-body run at \(run.start) lasts \(run.end - run.start) counts (> \(maxUpperBodyRun))")
+        }
+        for i in 1..<max(runs.count, 1) where runs.count > 1 {
+            let gap = runs[i].start - runs[i - 1].end
+            if gap < minUpperBodyGap {
+                problems.append("Only \(gap) counts of leg work between upper-body runs at \(runs[i-1].end) and \(runs[i].start) (< \(minUpperBodyGap))")
             }
         }
         return problems

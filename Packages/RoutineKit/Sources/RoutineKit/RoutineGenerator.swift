@@ -10,6 +10,7 @@ import Foundation
 /// then walks the song phrase by phrase emitting long same-move blocks:
 ///   · a section plays its planned move for its whole length
 ///   · long peak sections open with a build phrase (standing run) before the signature move hits
+///   · CHOREOGRAPHY songs give a recurring set (push-ups, tap-backs…) alternate phrases all song
 ///   · bridge/breakdown may layer ONE upper-body accent block at their top (density-capped)
 ///   · after 2 consecutive peak phrases a recovery phrase is forced (safety canon, unchanged)
 /// Cues (form/countdown) fire only on actual move *transitions*, so the ride reads as a handful of
@@ -44,7 +45,7 @@ public struct RoutineGenerator {
         var resistanceUp = false
         var consecutivePeakPhrases = 0
         var forcedRecovery = false
-        var lastUpperBodyStart: Int? = nil
+        var lastUpperBodyEnd: Int? = nil
         var previousMoveName: String? = nil
 
         var phraseIndex = 0
@@ -66,7 +67,7 @@ public struct RoutineGenerator {
                     move: stepDown, startCount: cursor, counts: phraseLen, routineStart: start,
                     isTransition: previousMoveName != stepDown.name,
                     isLeadLegPhrase: isLeadLegPhrase, confidence: request.confidence,
-                    resistanceUp: &resistanceUp, lastUpperBodyStart: &lastUpperBodyStart
+                    resistanceUp: &resistanceUp, lastUpperBodyEnd: &lastUpperBodyEnd
                 )
                 phraseEvents.append(ev)
                 previousMoveName = stepDown.name
@@ -76,7 +77,7 @@ public struct RoutineGenerator {
                 let placement = sectionPlacement(of: cursor, in: section)
                 let layout = phraseLayout(
                     section: section, placement: placement, plan: plan,
-                    at: cursor, lastUpperBodyStart: lastUpperBodyStart,
+                    at: cursor, lastUpperBodyEnd: lastUpperBodyEnd,
                     previousMoveName: previousMoveName
                 )
 
@@ -95,7 +96,7 @@ public struct RoutineGenerator {
                             isTransition: previousMoveName != move.name && tiled == 0,
                             isLeadLegPhrase: isLeadLegPhrase && offset == 0 && tiled == 0,
                             confidence: request.confidence,
-                            resistanceUp: &resistanceUp, lastUpperBodyStart: &lastUpperBodyStart
+                            resistanceUp: &resistanceUp, lastUpperBodyEnd: &lastUpperBodyEnd
                         )
                         phraseEvents.append(ev)
                         previousMoveName = move.name
@@ -128,7 +129,7 @@ public struct RoutineGenerator {
                     move: move, startCount: cursor, counts: len, routineStart: start,
                     isTransition: previousMoveName != move.name, isLeadLegPhrase: false,
                     confidence: request.confidence,
-                    resistanceUp: &resistanceUp, lastUpperBodyStart: &lastUpperBodyStart
+                    resistanceUp: &resistanceUp, lastUpperBodyEnd: &lastUpperBodyEnd
                 )
                 events.append(ev)
             }
@@ -142,13 +143,28 @@ public struct RoutineGenerator {
 
     struct SongPlan {
         /// Primary move per section type — chorus/drop entries are the song's signature moves.
+        /// Always a legs move: choreography rides on top of it (see `choreo`).
         var primary: [SectionType: Move]
         /// Optional upper-body accent for bridge/breakdown tops.
         var accent: [SectionType: Move]
+        /// CHOREOGRAPHY SONGS: the recurring set (push-ups, press-downs, tap-backs…) that owns
+        /// alternate phrases of every section it's legal in, making it the song's main event
+        /// rather than a 7-second stab. Empty on effort songs (climbs, sprints, bookends).
+        var choreo: [SectionType: Move]
         /// The build move that opens long peak sections before the signature hits.
         var buildMove: Move
         /// Seeded 0/1: which phrases carry the lead-leg cue (keeps reshuffles structurally distinct).
         var leadLegParity: UInt64
+    }
+
+    /// Chance an eligible song (no strong effort role of its own) is choreography-forward.
+    /// Real classes alternate: a couple of "moves" songs per class, not every song and not none.
+    private static let choreoSongChance: UInt64 = 70
+
+    /// Rhythm choreography: upper-body work, plus tap-backs — a seated move, but one a rider
+    /// experiences as choreography rather than as effort.
+    static func isChoreography(_ move: Move) -> Bool {
+        move.upperBody || move.name == MoveLibrary.tapBacks.name
     }
 
     private func buildPlan(sections: [Section], request: RoutineRequest, rng: inout SplitMix64) -> SongPlan {
@@ -212,7 +228,50 @@ public struct RoutineGenerator {
             }
         }
 
-        return SongPlan(primary: primary, accent: accent,
+        // Is this a CHOREOGRAPHY song? Effort songs (climb/sprint) and the easy bookends keep the
+        // legs as the whole story; everything else can become a "moves" song, where one set recurs
+        // across the whole track. Without this, upper-body work could only ever be a single
+        // half-phrase accent (~7 s a song) — nothing like a real class, where a track is often
+        // *the push-up song* or *the tap-back song*.
+        let choreoForward: Bool = {
+            switch request.classRole {
+            case .arms:                                   return true
+            // Songs with a signature of their own keep it: the jumps song is about jumps, the
+            // sprint song about sprints. Choreography would steal the phrases that ARE the point.
+            case .warmup, .cooldown, .sprint, .climb, .jumps: return false
+            // Recovery songs can carry LIGHT rhythm work (tap-backs, press-downs) — that's a real
+            // active-recovery track, and it keeps every class from being choreography-free.
+            case .recovery:                               return rng.next() % 100 < Self.choreoSongChance
+            case .run, .none:                             return rng.next() % 100 < Self.choreoSongChance
+            }
+        }()
+
+        var choreo: [SectionType: Move] = [:]
+        if choreoForward && !easyBookendRole {
+            // Bookends stay simple; everything else can host the set.
+            let hostTypes: [SectionType] = [.verse, .preChorus, .chorus, .drop, .bridge, .breakdown]
+                .filter { presentTypes.contains($0) }
+            // Choreography = upper-body work plus tap-backs (a rhythm move that reads the same way
+            // to a rider) — except on an ARMS track, where the whole point is the arms, so the set
+            // must be real upper-body work. Ordered library filter keeps the pick deterministic.
+            let armsTrack = request.classRole == .arms
+            // A recovery track stays recovery: light choreography only, nothing high-tier.
+            let easyOnly = request.classRole == .recovery
+            let pool = library.filter { move in
+                (armsTrack ? move.upperBody : Self.isChoreography(move))
+                    && (!easyOnly || move.intensityTier <= .moderate)
+                    && move.skillTier <= request.skillLevel
+                    && hostTypes.contains(where: { move.sectionAffinity.contains($0) })
+            }
+            if !pool.isEmpty {
+                let pick = pool[Int(rng.next() % UInt64(pool.count))]
+                for type in hostTypes where pick.sectionAffinity.contains(type) {
+                    choreo[type] = pick
+                }
+            }
+        }
+
+        return SongPlan(primary: primary, accent: accent, choreo: choreo,
                         buildMove: MoveLibrary.standingRun,
                         leadLegParity: rng.next() % 2)
     }
@@ -240,9 +299,10 @@ public struct RoutineGenerator {
         // Role ceiling: warm-up/cooldown songs never go hard; recovery songs never go peak.
         let roleCap: IntensityTier = {
             switch request.classRole {
-            case .warmup, .cooldown: return .moderate
-            case .recovery:          return .high
-            default:                 return .peak
+            // Recovery songs sit at moderate: capped at .high they picked up seated climbs and
+            // stopped being recovery at all.
+            case .warmup, .cooldown, .recovery: return .moderate
+            default:                            return .peak
             }
         }()
         let cappedMax = IntensityTier(rawValue: min(maxTier.rawValue, roleCap.rawValue)) ?? maxTier
@@ -252,11 +312,15 @@ public struct RoutineGenerator {
         let shift = Int(((request.intensity.value - 0.5) * 4.0).rounded())
         let target = min(max(baseline + shift, 0), cappedMax.rawValue)
 
-        // Upper-body moves are NEVER section primaries — a whole section of press-downs would blow
-        // the choreo density cap and reads nothing like a real class. They only appear as accents.
+        // The primary is always a LEGS move: upper-body work rides on top of it as the song's
+        // choreography set (see SongPlan.choreo), so the pedals never stop being the ride.
+        // Warm-ups and cooldowns additionally skip rhythm choreography entirely — those songs are
+        // for finding the beat and coming back down, not for a tap-back feature.
         // Standing Climb is a low-cadence grind: only offered on slower songs (< 120 BPM ≈ < 60 RPM).
+        let bookend = request.classRole == .warmup || request.classRole == .cooldown
         let candidates = library.filter { move in
             move.skillTier <= request.skillLevel && !move.upperBody &&
+            !(bookend && Self.isChoreography(move)) &&
             move.intensityTier <= cappedMax &&
             !(move.name == MoveLibrary.standingClimb.name && request.bpm >= 120) &&
             types.allSatisfy { move.sectionAffinity.contains($0) }
@@ -277,10 +341,13 @@ public struct RoutineGenerator {
     /// signature nearly certain while keeping seeds meaningful for everything else).
     private func roleBoost(_ move: Move, role: SongRole?) -> Double {
         guard let role else { return 1 }
+        let isSprint = move.name.contains("Sprint"), isClimb = move.name.contains("Climb")
         switch role {
         case .jumps:  return move.name == MoveLibrary.jumps.name ? 25 : 1
-        case .sprint: return move.name.contains("Sprint") ? 8 : 1
-        case .climb:  return move.name.contains("Climb") ? 8 : 1
+        // Sprint and climb damp each OTHER: without this, a sprint song's long verses could fill
+        // with seated climbs and the track read as a climb song with sprints bolted on.
+        case .sprint: return isSprint ? 8 : (isClimb ? 0.3 : 1)
+        case .climb:  return isClimb ? 8 : (isSprint ? 0.3 : 1)
         case .run:    return move.name == MoveLibrary.standingRun.name ? 5 : 1
         default:      return 1
         }
@@ -301,9 +368,15 @@ public struct RoutineGenerator {
     /// exceptions are the build phrase opening a long peak section, and an accent block at the top
     /// of bridge/breakdown.
     private func phraseLayout(section: Section, placement: Placement, plan: SongPlan,
-                              at count: Int, lastUpperBodyStart: Int?,
+                              at count: Int, lastUpperBodyEnd: Int?,
                               previousMoveName: String?) -> [Move] {
         let primary = plan.primary[section.type] ?? MoveLibrary.seatedFlat
+
+        /// Enough leg work since the last upper-body set to start another (spec §B4 rule 5).
+        func restedEnough(_ move: Move) -> Bool {
+            guard move.upperBody else { return true }
+            return lastUpperBodyEnd.map { count - $0 >= Grammar.minUpperBodyGap } ?? true
+        }
 
         // Long peak section → open with the build move before the signature hits… unless the rider
         // is already IN the build (a pre-chorus just ran it) — then the payoff lands on the drop.
@@ -312,12 +385,21 @@ public struct RoutineGenerator {
             return [plan.buildMove]
         }
 
+        // CHOREOGRAPHY SONG: the set owns alternate phrases, so the rider gets "a phrase of
+        // push-ups, a phrase back on the beat, repeat" — the way it's actually cued, and what
+        // keeps a continuous upper-body run inside the safety cap while still making the set the
+        // song's main event.
+        if let choreoMove = plan.choreo[section.type],
+           placement.phraseInSection % 2 == 0,
+           choreoMove.name != primary.name,
+           restedEnough(choreoMove) {
+            return [choreoMove]
+        }
+
         // Section top → accent block (tap-backs on verses, push-ups/press-downs on bridge/breakdown).
         // The density cap only constrains upper-body accents.
         if placement.phraseInSection == 0, let accentMove = plan.accent[section.type] {
-            let densityOK = !accentMove.upperBody
-                || (lastUpperBodyStart.map { count - $0 >= 64 } ?? true)
-            if densityOK && accentMove.name != primary.name {
+            if restedEnough(accentMove) && accentMove.name != primary.name {
                 return [accentMove, primary]     // half-phrase each
             }
         }
@@ -350,7 +432,7 @@ public struct RoutineGenerator {
         isLeadLegPhrase: Bool,
         confidence: MapConfidence,
         resistanceUp: inout Bool,
-        lastUpperBodyStart: inout Int?
+        lastUpperBodyEnd: inout Int?
     ) -> MoveEvent {
         var cues: [Cue] = []
 
@@ -386,7 +468,7 @@ public struct RoutineGenerator {
         }
 
         if move.upperBody {
-            lastUpperBodyStart = startCount
+            lastUpperBodyEnd = startCount + counts    // where the LEGS get the ride back
         }
 
         return MoveEvent(startCount: startCount, move: move, counts: counts, cues: cues)

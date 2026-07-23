@@ -195,6 +195,80 @@ final class RoutineKitTests: XCTestCase {
         XCTAssertTrue(sawDown, "no resistanceDown cue across 30 seeds — the ease-off path is dead again")
     }
 
+    // MARK: Choreography balance (2026-07-23 — Kevin: "mostly a stand/sprint class")
+
+    /// Share of a song's counts spent on upper-body work.
+    private func upperBodyShare(_ routine: Routine) -> Double {
+        let total = routine.events.reduce(0) { $0 + $1.counts }
+        guard total > 0 else { return 0 }
+        let upper = routine.events.filter { $0.move.upperBody }.reduce(0) { $0 + $1.counts }
+        return Double(upper) / Double(total)
+    }
+
+    func testArmsTrackIsActuallyAnArmsTrack() {
+        // An arms song must FEATURE arms, not garnish with one 7-second stab.
+        for seed in UInt64(1)...20 {
+            let request = SampleSongs.edmAnthem(seed: seed, skill: .three)
+            let armsRequest = RoutineRequest(
+                trackKey: "arms-\(seed)", bpm: request.bpm, sections: request.sections,
+                confidence: .learned, skillLevel: .three, intensity: .medium,
+                seed: seed, classRole: .arms)
+            let share = upperBodyShare(gen.generate(armsRequest))
+            XCTAssertGreaterThanOrEqual(share, 0.20,
+                "arms track (seed \(seed)) is only \(Int(share * 100))% upper-body work")
+        }
+    }
+
+    func testChoreographyCanBeASongsMainEvent() {
+        // Upper-body work used to be hard-capped at ONE 16-count accent (~7 s) per song, because
+        // it could never be a section primary. Across a spread of songs, choreography must now
+        // carry real weight on some of them.
+        var choreoLed = 0
+        for seed in UInt64(1)...30 {
+            let base = SampleSongs.edmAnthem(seed: seed, skill: .three)
+            let request = RoutineRequest(
+                trackKey: "song-\(seed)", bpm: base.bpm, sections: base.sections,
+                confidence: .learned, skillLevel: .three, intensity: .medium,
+                seed: seed, classRole: .run)
+            if upperBodyShare(gen.generate(request)) >= 0.25 { choreoLed += 1 }
+        }
+        XCTAssertGreaterThan(choreoLed, 0, "no song made choreography its main event")
+    }
+
+    func testUpperBodyRunsStayInsideTheSafetyCap() {
+        // The flip side: sustained is allowed, endless is not. Legs must get the ride back.
+        for seed in UInt64(1)...30 {
+            for role in [SongRole.arms, .run, .recovery] {
+                let base = SampleSongs.edmAnthem(seed: seed, skill: .three)
+                let request = RoutineRequest(
+                    trackKey: "cap-\(seed)-\(role.rawValue)", bpm: base.bpm, sections: base.sections,
+                    confidence: .learned, skillLevel: .three, intensity: .medium,
+                    seed: seed, classRole: role)
+                XCTAssertEqual(Grammar.checkDensityCap(gen.generate(request).events), [],
+                               "seed \(seed) role \(role.rawValue)")
+            }
+        }
+    }
+
+    func testSongRolesKeepTheirSignature() {
+        // Choreography must not hijack a song whose whole job is something else.
+        for seed in UInt64(1)...20 {
+            let base = SampleSongs.edmAnthem(seed: seed, skill: .three)
+            func routine(_ role: SongRole) -> Routine {
+                gen.generate(RoutineRequest(
+                    trackKey: "role-\(seed)-\(role.rawValue)", bpm: base.bpm, sections: base.sections,
+                    confidence: .learned, skillLevel: .three, intensity: .medium,
+                    seed: seed, classRole: role))
+            }
+            // Bookends stay simple: no upper-body choreography at all.
+            XCTAssertEqual(upperBodyShare(routine(.warmup)), 0, "warm-up (seed \(seed)) has choreography")
+            XCTAssertEqual(upperBodyShare(routine(.cooldown)), 0, "cooldown (seed \(seed)) has choreography")
+            // Effort songs keep the legs as the story.
+            XCTAssertLessThan(upperBodyShare(routine(.sprint)), 0.15, "sprint song (seed \(seed)) over-choreographed")
+            XCTAssertLessThan(upperBodyShare(routine(.jumps)), 0.15, "jumps song (seed \(seed)) over-choreographed")
+        }
+    }
+
     // MARK: Fuzz — grammar holds across the settings space
 
     func testGrammarHoldsUnderFuzz() {

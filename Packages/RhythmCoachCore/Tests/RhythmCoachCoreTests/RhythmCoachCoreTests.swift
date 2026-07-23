@@ -201,6 +201,23 @@ final class RhythmCoachCoreTests: XCTestCase {
         XCTAssertEqual(coach.frame(at: 0).suggestedRPM, 64)
     }
 
+    func testSprintCadenceRidesEveryBeat() {
+        // Sprints are pedalled on the beat, not every other beat — the cadence readout has to
+        // agree with the pictogram (which has always spun the legs twice as fast in a sprint)
+        // and with real sprint cadence (90–110 RPM, not a 64 RPM climb).
+        let req = SampleSongs.edmAnthem()
+        let routine = RoutineGenerator().generate(req)
+        let coach = LiveCoach(routine: routine, clock: BeatClock(bpm: 128, beatOffset: 0),
+                              sections: req.sections, confidence: .learned)
+        let secondsPerCount = 60.0 / 128.0
+        guard let sprint = routine.events.first(where: { $0.move.name.contains("Sprint") }) else {
+            return XCTFail("sample song generated no sprint to check")
+        }
+        let frame = coach.frame(at: Double(sprint.startCount) * secondsPerCount + 0.05)
+        XCTAssertTrue(frame.ridesEveryBeat, "sprint frame should ride every beat")
+        XCTAssertEqual(frame.suggestedRPM, 128, "sprint cadence must double the base RPM")
+    }
+
     // MARK: ClassPlanner
 
     private func fixtureClassSongs() -> [ClassSong] {

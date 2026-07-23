@@ -13,9 +13,17 @@ public struct LiveFrame: Sendable, Equatable {
     public let countInPhrase: Int       // 0...31
     public let phraseIndex: Int
     public let bpm: Double
-    /// Suggested pedal cadence: downstroke locks to the beat with alternating legs, so one full
-    /// crank revolution spans 2 beats → RPM ≈ BPM / 2 (spec §B1 safety canon).
-    public var suggestedRPM: Int { Int((bpm / 2).rounded()) }
+    /// Suggested pedal cadence. Base rhythm riding turns one crank revolution per 2 beats, so
+    /// RPM ≈ BPM / 2 (spec §B1) — a 60–80 RPM climb/base feel at typical class tempo.
+    /// SPRINTS ride the beat itself (one revolution per beat), which is what the pictogram has
+    /// always animated and what a 90–110 RPM sprint cadence requires; showing BPM/2 during a
+    /// sprint told the rider to hold a climb cadence while the on-screen legs spun twice that.
+    public var suggestedRPM: Int {
+        Int((ridesEveryBeat ? bpm : bpm / 2).rounded())
+    }
+
+    /// True for moves pedalled on every beat rather than every other beat.
+    public var ridesEveryBeat: Bool { currentMoveName.contains("Sprint") }
 
     public let currentMoveName: String
     public let currentFormCue: String

@@ -24,12 +24,15 @@ public enum MoveLibrary {
         formCue: ""
     )
 
+    /// Widened to choruses 2026-07-23: Standing Climb is gated to slow tracks (< 120 BPM), so with
+    /// verses-and-bridges-only affinity a climb song at 128 BPM had no climb available for its
+    /// biggest sections and defaulted to Standing Run — a "climb" song that never climbed.
     public static let seatedClimb = Move(
         name: "Seated Climb",
         allowedCounts: [16, 32],
         intensityTier: .high,
         position: .seated,
-        sectionAffinity: [.verse, .bridge],
+        sectionAffinity: [.verse, .preChorus, .chorus, .bridge],
         requiresResistanceFloor: true,
         upperBody: false,
         skillTier: .one,
@@ -99,12 +102,15 @@ public enum MoveLibrary {
         formCue: ""
     )
 
+    // Section affinities widened 2026-07-23 (Kevin's choreography feedback + instructor sources):
+    // rhythm choreography is cued "using the verse AND the chorus", not parked in bridges. Upper-body
+    // work deliberately still avoids `.drop` — the drop stays the legs' payoff.
     public static let tapBacks = Move(
         name: "Tap-Backs",
         allowedCounts: [8, 16],
         intensityTier: .moderate,
         position: .seated,
-        sectionAffinity: [.verse, .bridge, .breakdown],
+        sectionAffinity: [.verse, .preChorus, .chorus, .bridge, .breakdown],
         requiresResistanceFloor: false,
         upperBody: false,
         skillTier: .one,
@@ -116,7 +122,7 @@ public enum MoveLibrary {
         allowedCounts: [8, 16],
         intensityTier: .moderate,
         position: .seated,
-        sectionAffinity: [.chorus, .bridge, .breakdown],
+        sectionAffinity: [.verse, .preChorus, .chorus, .bridge, .breakdown],
         requiresResistanceFloor: false,
         upperBody: true,
         skillTier: .one,
@@ -128,7 +134,7 @@ public enum MoveLibrary {
         allowedCounts: [8, 16],
         intensityTier: .high,
         position: .hybrid,
-        sectionAffinity: [.bridge, .breakdown],
+        sectionAffinity: [.verse, .chorus, .bridge, .breakdown],
         requiresResistanceFloor: true,
         upperBody: true,
         skillTier: .two,
@@ -140,7 +146,7 @@ public enum MoveLibrary {
         allowedCounts: [8, 16],
         intensityTier: .high,
         position: .hybrid,
-        sectionAffinity: [.bridge, .breakdown],
+        sectionAffinity: [.verse, .chorus, .bridge, .breakdown],
         requiresResistanceFloor: true,
         upperBody: true,
         skillTier: .two,
@@ -153,7 +159,7 @@ public enum MoveLibrary {
         allowedCounts: [8, 16],
         intensityTier: .high,
         position: .hybrid,
-        sectionAffinity: [.bridge, .breakdown],
+        sectionAffinity: [.verse, .chorus, .bridge, .breakdown],
         requiresResistanceFloor: true,
         upperBody: true,
         skillTier: .two,
@@ -166,7 +172,7 @@ public enum MoveLibrary {
         allowedCounts: [8, 16],
         intensityTier: .high,
         position: .hybrid,
-        sectionAffinity: [.verse, .bridge, .breakdown],
+        sectionAffinity: [.verse, .chorus, .bridge, .breakdown],
         requiresResistanceFloor: true,
         upperBody: true,
         skillTier: .two,
@@ -179,7 +185,7 @@ public enum MoveLibrary {
         allowedCounts: [8, 16],
         intensityTier: .moderate,
         position: .seated,
-        sectionAffinity: [.verse, .bridge, .breakdown],
+        sectionAffinity: [.verse, .preChorus, .bridge, .breakdown],
         requiresResistanceFloor: false,
         upperBody: true,
         skillTier: .two,
