@@ -203,7 +203,28 @@ public struct RoutineGenerator {
         // Warm-up and cooldown songs carry NO accents — just easy riding in and out of the class.
         let easyBookendRole = request.classRole == .warmup || request.classRole == .cooldown
 
-        if !easyBookendRole {
+        // Is this a CHOREOGRAPHY song? Effort songs (climb/sprint) and the easy bookends keep the
+        // legs as the whole story; everything else can become a "moves" song, where one set recurs
+        // across the whole track. Without this, upper-body work could only ever be a single
+        // half-phrase accent (~7 s a song) — nothing like a real class, where a track is often
+        // *the push-up song* or *the tap-back song*.
+        let choreoForward: Bool = {
+            switch request.classRole {
+            case .arms:                                   return true
+            // Songs with a signature of their own keep it: the jumps song is about jumps, the
+            // sprint song about sprints. Choreography would steal the phrases that ARE the point.
+            case .warmup, .cooldown, .sprint, .climb, .jumps: return false
+            // Recovery songs can carry LIGHT rhythm work (tap-backs, press-downs) — that's a real
+            // active-recovery track, and it keeps every class from being choreography-free.
+            case .recovery:                               return rng.next() % 100 < Self.choreoSongChance
+            case .run, .none:                             return rng.next() % 100 < Self.choreoSongChance
+            }
+        }()
+
+        // A choreo-forward song's ONE set IS its choreography — it doesn't also get the light
+        // verse/bridge accents, which would push the distinct-move count past a real class's
+        // handful. Only non-choreo songs get the sprinkle of accents.
+        if !easyBookendRole && !choreoForward {
             // Upper-body accent for bridge/breakdown tops (push-ups / press-downs) — always present
             // when the skill level allows it. An ARMS song extends accents to every section type
             // (the density cap still spaces them out).
@@ -228,33 +249,19 @@ public struct RoutineGenerator {
             }
         }
 
-        // Is this a CHOREOGRAPHY song? Effort songs (climb/sprint) and the easy bookends keep the
-        // legs as the whole story; everything else can become a "moves" song, where one set recurs
-        // across the whole track. Without this, upper-body work could only ever be a single
-        // half-phrase accent (~7 s a song) — nothing like a real class, where a track is often
-        // *the push-up song* or *the tap-back song*.
-        let choreoForward: Bool = {
-            switch request.classRole {
-            case .arms:                                   return true
-            // Songs with a signature of their own keep it: the jumps song is about jumps, the
-            // sprint song about sprints. Choreography would steal the phrases that ARE the point.
-            case .warmup, .cooldown, .sprint, .climb, .jumps: return false
-            // Recovery songs can carry LIGHT rhythm work (tap-backs, press-downs) — that's a real
-            // active-recovery track, and it keeps every class from being choreography-free.
-            case .recovery:                               return rng.next() % 100 < Self.choreoSongChance
-            case .run, .none:                             return rng.next() % 100 < Self.choreoSongChance
-            }
-        }()
-
         var choreo: [SectionType: Move] = [:]
         if choreoForward && !easyBookendRole {
-            // Bookends stay simple; everything else can host the set.
-            let hostTypes: [SectionType] = [.verse, .preChorus, .chorus, .drop, .bridge, .breakdown]
+            let armsTrack = request.classRole == .arms
+            // Choreography sits on the SETUP sections (verses, pre-chorus, bridges) — the chorus and
+            // drop stay the legs' payoff and keep their recurring signature, which is exactly how a
+            // real class maps it ("setup on the verse, effort on the chorus"). The one exception is
+            // an ARMS track: its whole job is arms, so it works them through the choruses too.
+            let setup: [SectionType] = [.verse, .preChorus, .bridge, .breakdown]
+            let hostTypes = (armsTrack ? setup + [.chorus, .drop] : setup)
                 .filter { presentTypes.contains($0) }
             // Choreography = upper-body work plus tap-backs (a rhythm move that reads the same way
             // to a rider) — except on an ARMS track, where the whole point is the arms, so the set
             // must be real upper-body work. Ordered library filter keeps the pick deterministic.
-            let armsTrack = request.classRole == .arms
             // A recovery track stays recovery: light choreography only, nothing high-tier.
             let easyOnly = request.classRole == .recovery
             let pool = library.filter { move in
@@ -397,8 +404,11 @@ public struct RoutineGenerator {
         }
 
         // Section top → accent block (tap-backs on verses, push-ups/press-downs on bridge/breakdown).
-        // The density cap only constrains upper-body accents.
-        if placement.phraseInSection == 0, let accentMove = plan.accent[section.type] {
+        // The density cap only constrains upper-body accents. Both moves must support a half-phrase
+        // (16-count) block — a 32-count-only move like the combo is never split.
+        let half = Routine.phraseLength / 2
+        if placement.phraseInSection == 0, let accentMove = plan.accent[section.type],
+           accentMove.allowedCounts.contains(half), primary.allowedCounts.contains(half) {
             if restedEnough(accentMove) && accentMove.name != primary.name {
                 return [accentMove, primary]     // half-phrase each
             }

@@ -28,6 +28,8 @@ struct MovePictogram: View {
     let beatTime: Double
     /// Beats since this move's block began — drives progressive animation (jump ladder, combos).
     var countsIntoMove: Double = 0
+    /// Crank revolutions per beat — how fast the legs turn (grind 0.25 / base 0.5 / sprint 1.0).
+    var cadenceRevsPerBeat: Double = 0.5
     var bikeStyle: PictogramStyle = .spin
 
     var body: some View {
@@ -35,7 +37,7 @@ struct MovePictogram: View {
             let s = min(size.width, size.height) / 100
             ctx.scaleBy(x: s, y: s)
             let style = Style(moveName)
-            let pose = style.pose(at: beatTime, intoMove: countsIntoMove)
+            let pose = style.pose(at: beatTime, intoMove: countsIntoMove, revsPerBeat: cadenceRevsPerBeat)
 
             // Whole-glyph lean (corners) rotates about the bottom center.
             if pose.lean != 0 {
@@ -56,8 +58,10 @@ struct MovePictogram: View {
 
     private enum Style {
         case seatedFlat, seatedClimb, standingRun, standingClimb
+        case heavyClimb, standingHeavyClimb
         case sprintSeated, sprintStanding, jumps, tapBacks
         case pressDowns, pushups, widePushups, pushUpCombo, pushTapCombo, figure8s
+        case hovers, crunches, combo64
         case corners, recovery
 
         init(_ name: String) {
@@ -66,6 +70,8 @@ struct MovePictogram: View {
             case "Seated Climb":              self = .seatedClimb
             case "Standing Run":              self = .standingRun
             case "Standing Climb":            self = .standingClimb
+            case "Heavy Climb":               self = .heavyClimb
+            case "Standing Heavy Climb":      self = .standingHeavyClimb
             case "Seated Sprint":             self = .sprintSeated
             case "Standing Sprint":           self = .sprintStanding
             case "Jumps":                     self = .jumps
@@ -76,18 +82,31 @@ struct MovePictogram: View {
             case "Push-Up Combo":             self = .pushUpCombo
             case "Push-Up + Tap-Back Combo":  self = .pushTapCombo
             case "Figure 8s":                 self = .figure8s
+            case "Hovers":                    self = .hovers
+            case "Crunches":                  self = .crunches
+            case "64-Count Combo":            self = .combo64
             case "Corners / Cross-Ups":       self = .corners
             default:                          self = .recovery
             }
         }
 
-        func pose(at t: Double, intoMove m: Double) -> Pose {
-            // Base cadence: one crank revolution per 2 beats; sprints ride the beat itself.
-            // Phase: +π/2 puts the NEAR (right) foot at bottom-dead-center exactly ON the beat —
-            // the traditional spin convention (downstroke lands on the downbeat; legs alternate,
-            // so the right foot marks the 1-3-5-7 counts and the left the 2-4-6-8).
-            let isSprint = self == .sprintSeated || self == .sprintStanding
-            let crank = (isSprint ? 2 * .pi : .pi) * t + .pi / 2
+        func pose(at t: Double, intoMove m: Double, revsPerBeat: Double) -> Pose {
+            // Crank speed is the move's cadence: base 0.5 rev/beat (one rev per 2 beats), sprints
+            // 1.0 (ride the beat), heavy grinds 0.25 (cut the beat in half). Phase +π/2 puts the
+            // NEAR (right) foot at bottom-dead-center exactly ON the beat — the traditional spin
+            // convention (downstroke on the downbeat; legs alternate, so the right foot marks the
+            // 1-3-5-7 counts and the left the 2-4-6-8).
+            let crank = 2 * .pi * revsPerBeat * t + .pi / 2
+
+            // The 64-count combo is a sequence: it delegates to a sub-move's pose for each 16-count
+            // quarter, so the rider actually rides tap-backs → push-ups → hovers → crunches.
+            if self == .combo64 {
+                let quarter = Int((m / 16).rounded(.down)) % 4
+                let sub: Style = [.tapBacks, .pushups, .hovers, .crunches][quarter]
+                var cp = sub.pose(at: t, intoMove: m, revsPerBeat: revsPerBeat)
+                cp.arrows.append(Arrow(dir: .up, at: CGPoint(x: 52, y: 12), opacity: 0.5))  // "combo" marker
+                return cp
+            }
 
             var p = Pose(crankAngle: crank)
             switch self {
@@ -103,6 +122,15 @@ struct MovePictogram: View {
             case .standingClimb:
                 let bob = 1.0 * sin(.pi * t)
                 p.hip = CGPoint(x: 44, y: 35 + bob); p.torsoLean = 0.62; p.standing = true
+            case .heavyClimb:
+                // Half-time grind: deep forward drive, heavy body. Crank already turns slow (0.25
+                // rev/beat via revsPerBeat); a small downbeat surge sells the "push" each stroke.
+                let push = 0.06 * pulse(t, per: 2)
+                p.hip = CGPoint(x: 39, y: 43); p.torsoLean = 0.62 + push
+                p.speedLines = 0
+            case .standingHeavyClimb:
+                let heave = 1.4 * sin(.pi * t / 2)      // slow rise/fall, matches the half-time crank
+                p.hip = CGPoint(x: 43, y: 35 + heave); p.torsoLean = 0.68; p.standing = true
             case .sprintSeated:
                 p.hip = CGPoint(x: 39, y: 43); p.torsoLean = 0.75; p.speedLines = pulse(t, per: 1)
             case .sprintStanding:
@@ -182,6 +210,18 @@ struct MovePictogram: View {
                 p.elbowSag = 3
                 p.arrows = [Arrow(dir: sin(.pi * t / 2) > 0 ? .right : .left, at: CGPoint(x: 52, y: 14),
                                   opacity: 0.5)]
+            case .hovers:
+                // Hips pushed BACK and lifted UP off the saddle, held — a slight breathing float.
+                let float = 0.6 * sin(.pi * t)
+                p.hip = CGPoint(x: 35, y: 39 - float); p.torsoLean = 0.5; p.standing = true
+                p.arrows = [Arrow(dir: .up, at: CGPoint(x: 22, y: 44), opacity: 0.5),
+                            Arrow(dir: .left, at: CGPoint(x: 24, y: 52), opacity: 0.4)]
+            case .crunches:
+                // Seated ab crunch: chest curls toward the bars, elbows drop, on the beat.
+                let curl = max(0, sin(.pi * t))
+                p.hip = CGPoint(x: 39, y: 43); p.torsoLean = 0.4 + 0.3 * curl
+                p.elbowSag = 3 + 4 * curl
+                p.arrows = [Arrow(dir: .down, at: CGPoint(x: 60, y: 20), opacity: 0.35 + 0.65 * curl)]
             case .corners:
                 // Lean alternates every 4 counts.
                 let phase = sin(.pi * t / 2)
@@ -189,6 +229,8 @@ struct MovePictogram: View {
                 p.lean = 0.16 * phase
                 p.arrows = [Arrow(dir: phase > 0 ? .right : .left, at: CGPoint(x: 52, y: 14),
                                   opacity: 0.35 + 0.65 * abs(phase))]
+            case .combo64:
+                break   // handled by the early return above; here only for exhaustiveness
             }
             return p
         }

@@ -145,8 +145,10 @@ final class RoutineKitTests: XCTestCase {
         let avg = Double(blocks.reduce(0) { $0 + $1.counts }) / Double(blocks.count)
         XCTAssertGreaterThanOrEqual(avg, 24,
             "average move block should be most of a phrase, got \(avg) counts over \(blocks.count) blocks")
-        // And transitions should be on the order of the section count, not the phrase count.
-        XCTAssertLessThanOrEqual(blocks.count, 24, "36-phrase song had \(blocks.count) move blocks")
+        // Transitions stay on the order of the section count, not the phrase count. A choreography
+        // song adds some — alternating a phrase of the set with a phrase back on the beat — but the
+        // ride is still deliberate blocks (well under one transition per phrase), not churn.
+        XCTAssertLessThanOrEqual(blocks.count, 32, "36-phrase song had \(blocks.count) move blocks")
     }
 
     func testChorusSignatureIsConsistent() {
@@ -222,7 +224,7 @@ final class RoutineKitTests: XCTestCase {
     func testChoreographyCanBeASongsMainEvent() {
         // Upper-body work used to be hard-capped at ONE 16-count accent (~7 s) per song, because
         // it could never be a section primary. Across a spread of songs, choreography must now
-        // carry real weight on some of them.
+        // carry real weight on a meaningful number of them — a "moves" song, not a garnish.
         var choreoLed = 0
         for seed in UInt64(1)...30 {
             let base = SampleSongs.edmAnthem(seed: seed, skill: .three)
@@ -230,9 +232,9 @@ final class RoutineKitTests: XCTestCase {
                 trackKey: "song-\(seed)", bpm: base.bpm, sections: base.sections,
                 confidence: .learned, skillLevel: .three, intensity: .medium,
                 seed: seed, classRole: .run)
-            if upperBodyShare(gen.generate(request)) >= 0.25 { choreoLed += 1 }
+            if upperBodyShare(gen.generate(request)) >= 0.15 { choreoLed += 1 }
         }
-        XCTAssertGreaterThan(choreoLed, 0, "no song made choreography its main event")
+        XCTAssertGreaterThanOrEqual(choreoLed, 3, "choreography rarely carried a song (\(choreoLed)/30)")
     }
 
     func testUpperBodyRunsStayInsideTheSafetyCap() {
@@ -267,6 +269,43 @@ final class RoutineKitTests: XCTestCase {
             XCTAssertLessThan(upperBodyShare(routine(.sprint)), 0.15, "sprint song (seed \(seed)) over-choreographed")
             XCTAssertLessThan(upperBodyShare(routine(.jumps)), 0.15, "jumps song (seed \(seed)) over-choreographed")
         }
+    }
+
+    // MARK: Cadence & new moves (2026-07-23)
+
+    func testCadenceIsAssignedCorrectly() {
+        // Sprints ride the beat, heavy grinds cut it in half, everything else is base cadence.
+        for move in MoveLibrary.v1 {
+            switch move.name {
+            case "Seated Sprint", "Standing Sprint":
+                XCTAssertEqual(move.cadence, .sprint, move.name)
+            case "Heavy Climb", "Standing Heavy Climb":
+                XCTAssertEqual(move.cadence, .grind, move.name)
+            default:
+                XCTAssertEqual(move.cadence, .standard, move.name)
+            }
+        }
+    }
+
+    func testHeavyAndComboMovesCanAppear() {
+        // The new vocabulary must actually reach the rider: heavy grinds on climb songs, the
+        // combo on advanced choreography songs.
+        var sawHeavy = false, sawCombo = false
+        for seed in UInt64(1)...40 {
+            let base = SampleSongs.edmAnthem(seed: seed, skill: .three)
+            let climb = gen.generate(RoutineRequest(
+                trackKey: "climb-\(seed)", bpm: base.bpm, sections: base.sections,
+                confidence: .learned, skillLevel: .three, intensity: .medium,
+                seed: seed, classRole: .climb))
+            if climb.events.contains(where: { $0.move.cadence == .grind }) { sawHeavy = true }
+            let choreo = gen.generate(RoutineRequest(
+                trackKey: "choreo-\(seed)", bpm: base.bpm, sections: base.sections,
+                confidence: .learned, skillLevel: .three, intensity: .medium,
+                seed: seed, classRole: .run))
+            if choreo.events.contains(where: { $0.move.name == "64-Count Combo" }) { sawCombo = true }
+        }
+        XCTAssertTrue(sawHeavy, "no half-time heavy grind ever appeared on a climb song")
+        XCTAssertTrue(sawCombo, "the 64-count combo never appeared on a choreography song")
     }
 
     // MARK: Fuzz — grammar holds across the settings space

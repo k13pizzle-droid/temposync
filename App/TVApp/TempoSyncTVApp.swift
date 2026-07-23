@@ -37,7 +37,9 @@ struct TVRideView: View {
                     // Left: the rider, big.
                     VStack(spacing: 10) {
                         MovePictogram(moveName: frame.currentMoveName, beatTime: frame.beatTime,
-                                      countsIntoMove: frame.countsIntoMove, bikeStyle: .spin)
+                                      countsIntoMove: frame.countsIntoMove,
+                                      cadenceRevsPerBeat: frame.currentCadence.revsPerBeat,
+                                      bikeStyle: .spin)
                             .frame(width: 420, height: 420)
                         Text(frame.currentMoveName)
                             .font(.system(size: 64, weight: .heavy, design: .rounded))

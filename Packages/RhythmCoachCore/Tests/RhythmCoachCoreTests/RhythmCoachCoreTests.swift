@@ -218,6 +218,19 @@ final class RhythmCoachCoreTests: XCTestCase {
         XCTAssertEqual(frame.suggestedRPM, 128, "sprint cadence must double the base RPM")
     }
 
+    func testHeavyGrindHalvesTheCadence() {
+        // A half-time grind move reports ~BPM/4 — the heavy, slow feel — vs BPM/2 base.
+        let sections = [Section(type: .chorus, startCount: 0, counts: 64)]
+        let move = MoveLibrary.heavyClimb
+        let routine = Routine(trackKey: "t", seed: 1, startCount: 0, endCount: 64,
+                              events: [MoveEvent(startCount: 0, move: move, counts: 64, cues: [])])
+        let coach = LiveCoach(routine: routine, clock: BeatClock(bpm: 128, beatOffset: 0),
+                              sections: sections, confidence: .prior)
+        let frame = coach.frame(at: 0.05)
+        XCTAssertEqual(frame.currentCadence, .grind)
+        XCTAssertEqual(frame.suggestedRPM, 32, "heavy grind at 128 BPM should read ~32 RPM")
+    }
+
     // MARK: ClassPlanner
 
     private func fixtureClassSongs() -> [ClassSong] {

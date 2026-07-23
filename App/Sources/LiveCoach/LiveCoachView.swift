@@ -114,6 +114,7 @@ struct LiveCoachView: View {
                 MovePictogram(moveName: f.currentMoveName,
                               beatTime: reduceMotion ? 0.75 : f.beatTime,
                               countsIntoMove: f.countsIntoMove,
+                              cadenceRevsPerBeat: f.currentCadence.revsPerBeat,
                               bikeStyle: PictogramStyle(rawValue: bikeStyleRaw) ?? .spin)
                     .frame(width: 150, height: 150)
                     .accessibilityHidden(true)    // the move name below announces it

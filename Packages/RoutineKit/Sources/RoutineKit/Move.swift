@@ -1,5 +1,26 @@
 import Foundation
 
+/// How fast the legs turn relative to the beat — the difference between a light spin, a base ride,
+/// and a heavy half-time grind. The rider's downstroke always lands on a beat; this sets which beats.
+public enum Cadence: String, Sendable, Hashable, Codable {
+    /// Half-time heavy grind: one crank revolution every 4 beats. Cutting the beat in half — the
+    /// snare-on-3 feel — with heavy resistance. A 128 BPM song grinds at ~32 RPM.
+    case grind
+    /// The base ride: one revolution every 2 beats, downstroke on alternating beats. ~64 RPM @128.
+    case standard
+    /// Sprint: one revolution per beat, riding the beat itself. ~128 RPM @128.
+    case sprint
+
+    /// Crank revolutions per beat — drives both the suggested RPM and the pictogram's leg speed.
+    public var revsPerBeat: Double {
+        switch self {
+        case .grind:    return 0.25
+        case .standard: return 0.5
+        case .sprint:   return 1.0
+        }
+    }
+}
+
 /// A single entry in the rhythm-riding vocabulary (spec §B4 "Move library").
 ///
 /// `allowedCounts` holds the *block lengths* a move may occupy, drawn from {8, 16, 32}.
@@ -25,6 +46,8 @@ public struct Move: Sendable, Hashable, Codable, Identifiable {
     public let upperBody: Bool
     /// Minimum rider skill to be offered this move.
     public let skillTier: SkillTier
+    /// Leg speed relative to the beat (base / sprint / heavy grind). Defaults to `.standard`.
+    public let cadence: Cadence
     /// One-line form coaching cue shown on the live screen (spec §B5).
     public let formCue: String
 
@@ -37,6 +60,7 @@ public struct Move: Sendable, Hashable, Codable, Identifiable {
         requiresResistanceFloor: Bool,
         upperBody: Bool,
         skillTier: SkillTier,
+        cadence: Cadence = .standard,
         formCue: String
     ) {
         self.name = name
@@ -47,6 +71,7 @@ public struct Move: Sendable, Hashable, Codable, Identifiable {
         self.requiresResistanceFloor = requiresResistanceFloor
         self.upperBody = upperBody
         self.skillTier = skillTier
+        self.cadence = cadence
         self.formCue = formCue
     }
 

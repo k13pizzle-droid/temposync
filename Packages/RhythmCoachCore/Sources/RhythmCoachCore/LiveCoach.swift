@@ -13,17 +13,16 @@ public struct LiveFrame: Sendable, Equatable {
     public let countInPhrase: Int       // 0...31
     public let phraseIndex: Int
     public let bpm: Double
-    /// Suggested pedal cadence. Base rhythm riding turns one crank revolution per 2 beats, so
-    /// RPM ≈ BPM / 2 (spec §B1) — a 60–80 RPM climb/base feel at typical class tempo.
-    /// SPRINTS ride the beat itself (one revolution per beat), which is what the pictogram has
-    /// always animated and what a 90–110 RPM sprint cadence requires; showing BPM/2 during a
-    /// sprint told the rider to hold a climb cadence while the on-screen legs spun twice that.
-    public var suggestedRPM: Int {
-        Int((ridesEveryBeat ? bpm : bpm / 2).rounded())
-    }
+    /// Leg speed relative to the beat for the current move (base / sprint / heavy grind).
+    public let currentCadence: Cadence
+    /// Suggested pedal cadence = BPM × revolutions-per-beat. Base riding turns one revolution per
+    /// 2 beats (~64 RPM @128); sprints ride the beat (~128); heavy grinds cut the beat in half
+    /// (~32). Showing a flat BPM/2 used to tell a sprinting rider to hold a climb cadence while the
+    /// on-screen legs spun twice that.
+    public var suggestedRPM: Int { Int((bpm * currentCadence.revsPerBeat).rounded()) }
 
     /// True for moves pedalled on every beat rather than every other beat.
-    public var ridesEveryBeat: Bool { currentMoveName.contains("Sprint") }
+    public var ridesEveryBeat: Bool { currentCadence == .sprint }
 
     public let currentMoveName: String
     public let currentFormCue: String
@@ -41,6 +40,7 @@ public struct LiveFrame: Sendable, Equatable {
 
     public static let idle = LiveFrame(
         count: 0, beatPhase: 0, beatTime: 0, countsIntoMove: 0, countInPhrase: 0, phraseIndex: 0, bpm: 0,
+        currentCadence: .standard,
         currentMoveName: "—", currentFormCue: "Waiting for the beat…",
         currentPosition: .seated, currentIntensity: .recovery,
         nextMoveName: nil, countsUntilNext: nil, countdownText: nil,
@@ -91,6 +91,7 @@ public struct LiveCoach: Sendable {
             countInPhrase: pos.countInPhrase,
             phraseIndex: pos.phraseIndex,
             bpm: clock.bpm,
+            currentCadence: current?.cadence ?? .standard,
             currentMoveName: current?.name ?? "—",
             currentFormCue: current?.formCue ?? "Ride the beat",
             currentPosition: current?.position ?? .seated,

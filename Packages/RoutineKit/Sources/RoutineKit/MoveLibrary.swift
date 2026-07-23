@@ -73,6 +73,7 @@ public enum MoveLibrary {
         requiresResistanceFloor: true,
         upperBody: false,
         skillTier: .two,
+        cadence: .sprint,
         formCue: ""
     )
 
@@ -85,7 +86,37 @@ public enum MoveLibrary {
         requiresResistanceFloor: true,
         upperBody: false,
         skillTier: .two,
+        cadence: .sprint,
         formCue: ""
+    )
+
+    /// Half-time heavy grind (seated): the beat is cut in half, legs turn once every 4 beats against
+    /// heavy resistance. The "heavy song" feel — a slow, powerful grind (~32 RPM @128 BPM).
+    public static let heavyClimb = Move(
+        name: "Heavy Climb",
+        allowedCounts: [16, 32],
+        intensityTier: .high,
+        position: .seated,
+        sectionAffinity: [.verse, .preChorus, .chorus, .bridge],
+        requiresResistanceFloor: true,
+        upperBody: false,
+        skillTier: .two,
+        cadence: .grind,
+        formCue: "Heavy · slow"
+    )
+
+    /// Half-time heavy grind out of the saddle — the peak of a heavy song.
+    public static let standingHeavyClimb = Move(
+        name: "Standing Heavy Climb",
+        allowedCounts: [16, 32],
+        intensityTier: .peak,
+        position: .standing,
+        sectionAffinity: [.preChorus, .chorus, .bridge],
+        requiresResistanceFloor: true,
+        upperBody: false,
+        skillTier: .two,
+        cadence: .grind,
+        formCue: "Heavy · stand"
     )
 
     /// Jump blocks ladder their cadence (8-count → 4-count → 2-count cycles) as the block runs —
@@ -192,6 +223,50 @@ public enum MoveLibrary {
         formCue: ""
     )
 
+    /// Hover: hips pushed back and lifted an inch off the saddle, held over the pedal stroke — an
+    /// isometric core/glute burn. A control move, not upper body.
+    public static let hovers = Move(
+        name: "Hovers",
+        allowedCounts: [16, 32],
+        intensityTier: .high,
+        position: .hybrid,
+        sectionAffinity: [.verse, .preChorus, .bridge],
+        requiresResistanceFloor: true,
+        upperBody: false,
+        skillTier: .two,
+        formCue: "Hips back, hover"
+    )
+
+    /// Seated crunch: drop the elbows toward the bars and contract through the abs on the beat.
+    /// Upper-body / core choreography.
+    public static let crunches = Move(
+        name: "Crunches",
+        allowedCounts: [8, 16],
+        intensityTier: .moderate,
+        position: .seated,
+        sectionAffinity: [.verse, .chorus, .bridge, .breakdown],
+        requiresResistanceFloor: false,
+        upperBody: true,
+        skillTier: .two,
+        formCue: ""
+    )
+
+    /// The 64-count combo: a repeating signature sequence (tap-backs → push-ups → hovers →
+    /// crunches), one 16-count set each, cycling every 64 counts. The advanced "combo song"
+    /// centerpiece — high cognitive load, so skill 3 only. Not tagged upper-body: the sequence
+    /// self-balances leg and arm work, so it isn't subject to the continuous-upper-body cap.
+    public static let combo64 = Move(
+        name: "64-Count Combo",
+        allowedCounts: [32],
+        intensityTier: .high,
+        position: .hybrid,
+        sectionAffinity: [.chorus, .drop, .bridge],
+        requiresResistanceFloor: true,
+        upperBody: false,
+        skillTier: .three,
+        formCue: ""
+    )
+
     public static let cornersCrossUps = Move(
         name: "Corners / Cross-Ups",
         allowedCounts: [16, 32],
@@ -210,16 +285,21 @@ public enum MoveLibrary {
         seatedClimb,
         standingRun,
         standingClimb,
+        heavyClimb,
+        standingHeavyClimb,
         sprintSeated,
         sprintStanding,
         jumps,
         tapBacks,
+        hovers,
         pressDowns,
+        crunches,
         handlebarPushups,
         widePushups,
         pushUpCombo,
         pushUpTapBackCombo,
         figure8s,
+        combo64,
         cornersCrossUps,
     ]
 }
