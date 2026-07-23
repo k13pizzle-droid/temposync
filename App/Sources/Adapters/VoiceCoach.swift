@@ -21,7 +21,11 @@ final class VoiceCoach: NSObject, AVSpeechSynthesizerDelegate {
     /// True while a microphone session owns the shared audio session (calibration / Mode S).
     /// Spoken cues would both flip the session category under the live engine AND leak TTS into
     /// the capture the analyzer is listening to — so they are silenced for the duration.
-    var suppressed = false
+    /// When the mic lets go, the next cue re-asserts our category: the mic leaves the shared
+    /// session in .playAndRecord/.measurement, which would otherwise un-duck every later cue.
+    var suppressed = false {
+        didSet { if !suppressed { sessionConfigured = false } }
+    }
 
     private var sessionConfigured = false
 

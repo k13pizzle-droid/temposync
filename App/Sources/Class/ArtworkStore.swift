@@ -11,6 +11,10 @@ final class ArtworkStore {
 
     private let cache = NSCache<NSString, UIImage>()
     private var inFlight: Set<String> = []
+    /// Tracks that genuinely have no artwork — separate from `inFlight`, which must always empty
+    /// out again: leaving keys in it permanently meant an NSCache eviction bricked that artwork
+    /// for the rest of the session.
+    private var knownMisses: Set<String> = []
 
     private func key(_ trackKey: String, _ side: CGFloat) -> String { "\(trackKey)#\(Int(side))" }
 
@@ -18,18 +22,23 @@ final class ArtworkStore {
         cache.object(forKey: key(trackKey, side) as NSString)
     }
 
-    /// Query + decode run off the main thread; the result caches forever (nil results are not
-    /// retried this session via `inFlight`, so artless tracks don't re-query on every scroll).
+    /// Query + decode run off the main thread; successes cache (and reload after eviction),
+    /// artless tracks are remembered so they don't re-query on every scroll.
     func load(_ trackKey: String, side: CGFloat, provider: PlaylistProvider?) async -> UIImage? {
         if let hit = cached(trackKey, side: side) { return hit }
         guard let provider else { return nil }
         let cacheKey = key(trackKey, side)
-        guard !inFlight.contains(cacheKey) else { return nil }
+        guard !knownMisses.contains(cacheKey), !inFlight.contains(cacheKey) else { return nil }
         inFlight.insert(cacheKey)
         let image = await Task.detached(priority: .utility) {
             provider.artwork(for: trackKey, side: side)
         }.value
-        if let image { cache.setObject(image, forKey: cacheKey as NSString) }
+        inFlight.remove(cacheKey)
+        if let image {
+            cache.setObject(image, forKey: cacheKey as NSString)
+        } else {
+            knownMisses.insert(cacheKey)
+        }
         return image
     }
 }

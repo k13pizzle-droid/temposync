@@ -27,11 +27,18 @@ enum AppServices {
     /// library empty at first touch), the next access retries the real library once more.
     static var sharedProvider: PlaylistProvider {
         if let provider = _provider, !(provider is PreviewPlaylistProvider) { return provider }
+        // Retry the real library at most every few seconds — per-ACCESS retries ran a synchronous
+        // media-store query per List row on devices still stuck on the fixture provider.
+        if let provider = _provider, Date.now.timeIntervalSince(lastProviderRetry) < 5 {
+            return provider
+        }
+        lastProviderRetry = .now
         let fresh = makePlaylistProvider()
         if _provider == nil || !(fresh is PreviewPlaylistProvider) { _provider = fresh }
         return _provider!
     }
     private static var _provider: PlaylistProvider?
+    private static var lastProviderRetry = Date.distantPast
 
     /// IN-HOUSE tempo rung: analyze the track's own audio file with BeatKit (no mic, no network).
     /// Works for downloaded/purchased/DRM-free items; streamed-only tracks return nil and fall

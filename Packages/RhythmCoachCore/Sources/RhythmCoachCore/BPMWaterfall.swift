@@ -86,15 +86,18 @@ public final class BPMWaterfall {
     /// errors degrade to nil rather than throwing — the caller keeps its default-BPM routine and
     /// stays honest about it.
     public func resolve(title: String, artist: String) async -> ResolvedBPM? {
-        if let record = cachedRecord(title: title, artist: artist) {
-            if record.bpm > 0 { return ResolvedBPM(bpm: record.bpm, source: .cache) }
-            if record.source == Self.missSource,
-               Date.now.timeIntervalSince(record.updatedAt) < Self.missTTL {
-                return nil    // known miss, still fresh — skip the network entirely
-            }
+        if let record = cachedRecord(title: title, artist: artist), record.bpm > 0 {
+            return ResolvedBPM(bpm: record.bpm, source: .cache)
         }
+        // Seed BEFORE honoring a miss sentinel: an app update can ship seed rows for a track that
+        // sentineled earlier, and the seed must win immediately (resolveLocally already does).
         if let ref = seed.lookup(title: title, artist: artist), let bpm = ref.referenceBPM {
             return ResolvedBPM(bpm: bpm, source: .seed)
+        }
+        if let record = cachedRecord(title: title, artist: artist),
+           record.source == Self.missSource,
+           Date.now.timeIntervalSince(record.updatedAt) < Self.missTTL {
+            return nil    // known miss, still fresh — skip the network entirely
         }
         for service in services {
             guard let bpm = try? await service.lookupBPM(title: title, artist: artist), bpm > 0 else {
