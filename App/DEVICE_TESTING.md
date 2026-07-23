@@ -68,9 +68,12 @@ DEVELOPMENT_TEAM = XXXXXXXXXX      # Xcode → Settings → Accounts → Team ID
 regeneration. Then ⌘R. (Free Apple ID builds expire weekly — just re-run ⌘R.)
 
 ### Running on the iPhone + Watch
-- **Scheme must be `TempoSync`**, destination your iPhone. Selecting `TempoSyncWidgets`
-  runs the widget-extension debug flow instead and fails with a `SendProcessControlEvent`
-  / "Failed to show Widget" error.
+- **Scheme must be `TempoSync`**, destination your iPhone. Only three schemes exist now
+  (TempoSync, TempoSyncWatch, TempoSyncTV) — the widget extension deliberately has none,
+  because selecting it made runs fail with `SendProcessControlEvent` / "Failed to show
+  Widget ... Failed to get descriptors". It still builds and ships inside the app.
+- To boot straight into a screen on device: Product → Scheme → Edit Scheme → Run →
+  Arguments → tick one of `TEMPOSYNC_DEMO` / `MODEH` / `CLASS` / `CAL` (pre-wired, off).
 - **Unlock the phone before ⌘R.** A locked device refuses the launch request
   ("Unable to launch because the device was not, or could not be, unlocked").
 - The watch app installs automatically with the phone app (it's embedded). Keep the Watch
