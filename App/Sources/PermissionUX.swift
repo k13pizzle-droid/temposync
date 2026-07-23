@@ -17,6 +17,8 @@ enum PermissionUX {
         #endif
     }
 
+    /// Main-actor: UIApplication.shared and open(_:) are main-actor isolated (Swift 6).
+    @MainActor
     static func openSettings() {
         #if canImport(UIKit)
         if let url = URL(string: UIApplication.openSettingsURLString) {

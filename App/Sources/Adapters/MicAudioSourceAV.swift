@@ -20,8 +20,10 @@ final class MicAudioSourceAV: MicAudioSource, @unchecked Sendable {
 
     func start(onBuffer: @escaping @Sendable (_ samples: [Float], _ captureHostTime: Double) -> Void) throws {
         // Coexist with music over the speaker or headphones (spec §B2: both environments).
+        // HFP is the hands-free (mic-capable) Bluetooth profile — engaging it drops paired
+        // headphones to call-quality audio, which is inherent to listening over Bluetooth.
         try session.setCategory(.playAndRecord, mode: .measurement,
-                                options: [.mixWithOthers, .defaultToSpeaker, .allowBluetooth])
+                                options: [.mixWithOthers, .defaultToSpeaker, .allowBluetoothHFP])
         try session.setActive(true)
 
         // Hardware input latency: samples reach the tap this much after they hit the mic.

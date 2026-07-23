@@ -14,6 +14,8 @@ enum Theme {
     static let body = regular(17)
 
     /// UIKit-side navigation titles (SwiftUI's nav bars read UIAppearance).
+    /// Main-actor: UIAppearance proxies are main-actor isolated (Swift 6).
+    @MainActor
     static func installNavigationFonts() {
         #if canImport(UIKit)
         let large = UIFont(name: "Lato-Black", size: 34) ?? .boldSystemFont(ofSize: 34)
