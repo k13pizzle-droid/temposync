@@ -12,6 +12,24 @@ if [ ! -f Signing.xcconfig ]; then
 fi
 
 xcodegen generate
+
+# Turn OFF Xcode's automatic scheme creation. project.yml declares shared schemes for the three
+# runnable apps; left on, Xcode also invents one per target (including the widget extension) and
+# regenerating resets which scheme is selected — landing a device run on the widget, which cannot
+# be launched like an app ("Failed to show Widget ... Failed to get descriptors").
+settings_dir="TempoSync.xcodeproj/project.xcworkspace/xcshareddata"
+mkdir -p "$settings_dir"
+cat > "$settings_dir/WorkspaceSettings.xcsettings" <<'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>IDEWorkspaceSharedSettings_AutocreateContextsIfNeeded</key>
+	<false/>
+</dict>
+</plist>
+PLIST
+
 team=$(sed -n 's/^ *DEVELOPMENT_TEAM *= *//p' Signing.xcconfig | tr -d '[:space:]')
 if [ -n "$team" ]; then
   echo "Project generated. Signing team: $team"

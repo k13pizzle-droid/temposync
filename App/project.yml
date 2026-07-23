@@ -25,6 +25,8 @@ targets:
     type: application
     platform: watchOS
     deploymentTarget: "10.0"
+    # Shared scheme so debugging the watch app directly is one selector click, not a reset away.
+    scheme: {}
     sources:
       - path: WatchApp/Sources
       - path: WatchApp/Assets.xcassets
@@ -53,6 +55,7 @@ targets:
     type: application
     platform: tvOS
     deploymentTarget: "17.0"
+    scheme: {}
     sources:
       - path: TVApp
       - path: Sources/LiveCoach/MovePictogram.swift
@@ -156,6 +159,25 @@ targets:
           TempoSync saves your completed rides to Apple Health as indoor-cycling workouts.
         NSHealthShareUsageDescription: >-
           TempoSync only writes workouts; it never reads your Health data.
+    # Explicit SHARED scheme. Without one, Xcode auto-creates per-target schemes into user data
+    # and regenerating the project resets which is selected — that's how a run ends up trying to
+    # launch the widget extension ("Failed to show Widget ... Failed to get descriptors").
+    # The launch hooks are pre-wired here, unchecked: tick one in Product > Scheme > Edit Scheme
+    # > Run > Arguments to boot straight into that screen on device.
+    scheme:
+      environmentVariables:
+        - variable: TEMPOSYNC_DEMO
+          value: "1"
+          isEnabled: false
+        - variable: TEMPOSYNC_MODEH
+          value: "1"
+          isEnabled: false
+        - variable: TEMPOSYNC_CLASS
+          value: "1"
+          isEnabled: false
+        - variable: TEMPOSYNC_CAL
+          value: "1"
+          isEnabled: false
     dependencies:
       - package: RoutineKit
       - package: BeatKit
