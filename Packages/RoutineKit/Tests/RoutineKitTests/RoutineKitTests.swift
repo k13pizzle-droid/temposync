@@ -271,6 +271,47 @@ final class RoutineKitTests: XCTestCase {
         }
     }
 
+    // MARK: Settle window (2026-07-23 — real classes give riders time to get their feet situated)
+
+    func testEverySongOpensWithASettleWindow() {
+        var sawShort = false, sawLong = false
+        for seed in UInt64(1)...30 {
+            for role in [SongRole?.none, .run, .sprint, .climb, .arms, .jumps] {
+                let base = SampleSongs.edmAnthem(seed: seed, skill: .three)
+                let routine = gen.generate(RoutineRequest(
+                    trackKey: "settle-\(seed)-\(role?.rawValue ?? "n")", bpm: base.bpm,
+                    sections: base.sections, confidence: .learned, skillLevel: .three,
+                    intensity: .hard, seed: seed, classRole: role))
+                // The first phrase is always plain base riding — no accents, choreo, or effort moves.
+                let opening = routine.events.filter { $0.startCount < routine.startCount + 32 }
+                XCTAssertTrue(opening.allSatisfy { $0.move.name == "Seated Flat" },
+                    "seed \(seed) role \(String(describing: role)) opened with \(opening.map { $0.move.name })")
+                // And the song opens with the settle prompt.
+                XCTAssertTrue(opening.first?.cues.contains { $0.text == "Find the beat" } ?? false,
+                    "seed \(seed): no settle cue at song start")
+            }
+        }
+        // Settle length is only observable when the song opens on a non-flat section — a
+        // chorus-first layout guarantees the first working phrase is the signature move.
+        let chorusFirst = [
+            Section(type: .chorus, startCount: 0, counts: 128),
+            Section(type: .verse, startCount: 128, counts: 128),
+            Section(type: .chorus, startCount: 256, counts: 128),
+        ]
+        for seed in UInt64(1)...30 {
+            let routine = gen.generate(RoutineRequest(
+                trackKey: "settle-var-\(seed)", bpm: 128, sections: chorusFirst,
+                confidence: .learned, skillLevel: .three, intensity: .hard, seed: seed))
+            guard let firstWork = routine.events.first(where: { $0.move.name != "Seated Flat" }) else { continue }
+            let settle = firstWork.startCount - routine.startCount
+            XCTAssertGreaterThanOrEqual(settle, 32, "seed \(seed): settle shorter than one phrase")
+            if settle == 32 { sawShort = true }
+            if settle >= 64 { sawLong = true }
+        }
+        XCTAssertTrue(sawShort && sawLong,
+            "settle should vary between ~15s and ~30s across songs (short: \(sawShort), long: \(sawLong))")
+    }
+
     // MARK: Cadence & new moves (2026-07-23)
 
     func testCadenceIsAssignedCorrectly() {

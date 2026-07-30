@@ -70,14 +70,17 @@ public final class RideLogRecord {
     /// Class format minutes if this was a built class (nil = freestyle ride).
     public var formatMinutes: Int?
     public var reordered: Bool?
+    /// Distance from the bike's console, entered on the summary sheet (nil = not entered).
+    public var distanceMiles: Double?
 
     public init(startedAt: Date, durationMinutes: Double, songsPlayed: Int,
-                formatMinutes: Int? = nil, reordered: Bool? = nil) {
+                formatMinutes: Int? = nil, reordered: Bool? = nil, distanceMiles: Double? = nil) {
         self.startedAt = startedAt
         self.durationMinutes = durationMinutes
         self.songsPlayed = songsPlayed
         self.formatMinutes = formatMinutes
         self.reordered = reordered
+        self.distanceMiles = distanceMiles
     }
 }
 

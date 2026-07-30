@@ -41,6 +41,14 @@ public struct RoutineGenerator {
 
         let plan = buildPlan(sections: sections, request: request, rng: &rng)
 
+        // SETTLE WINDOW (2026-07-23, Kevin's real-class observation): moves never start the moment
+        // a track changes — riders get easy riding first to find the beat and get their feet
+        // situated, "sometimes up to 20–30 seconds". Seeded per song: one or two phrases
+        // (≈15 s / ≈30 s at 128 BPM), clamped so a short song keeps most of its length for the ride.
+        let totalPhrases = (end - start) / phraseLen
+        let settlePhrases = min(1 + Int(rng.next() % 2), max(1, totalPhrases / 4))
+        let settleCounts = settlePhrases * phraseLen
+
         var events: [MoveEvent] = []
         var resistanceUp = false
         var consecutivePeakPhrases = 0
@@ -57,7 +65,22 @@ public struct RoutineGenerator {
 
             var phraseEvents: [MoveEvent] = []
 
-            if forcedRecovery {
+            if cursor - start < settleCounts {
+                // Feet-situating time: plain base riding, no accents, no choreography, no lead-leg
+                // cue — just one "Find the beat" prompt as the song opens.
+                let settle = MoveLibrary.seatedFlat
+                var ev = makeEvent(
+                    move: settle, startCount: cursor, counts: phraseLen, routineStart: start,
+                    isTransition: false, isLeadLegPhrase: false, confidence: request.confidence,
+                    resistanceUp: &resistanceUp, lastUpperBodyEnd: &lastUpperBodyEnd
+                )
+                if cursor == start {
+                    ev = MoveEvent(startCount: ev.startCount, move: ev.move, counts: ev.counts,
+                                   cues: ev.cues + [Cue(type: .form, atCount: cursor, text: "Find the beat")])
+                }
+                phraseEvents.append(ev)
+                previousMoveName = settle.name
+            } else if forcedRecovery {
                 // Safety step-down after 2 peak phrases. Inside a high-energy section this is ACTIVE
                 // recovery (standing run — the work continues, just sub-peak), not a dead stop:
                 // round-3 feedback ("Calling" test) — the chorus should stay the workout's center of

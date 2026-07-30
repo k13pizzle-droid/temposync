@@ -29,6 +29,9 @@ targets:
     scheme: {}
     sources:
       - path: WatchApp/Sources
+      # The rider figure, shared by file inclusion (same pattern as the TV target) — the wrist
+      # shows the move's pose during workouts.
+      - path: Sources/LiveCoach/MovePictogram.swift
       - path: WatchApp/Assets.xcassets
       - path: WatchApp/PrivacyInfo.xcprivacy
         buildPhase: resources

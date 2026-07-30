@@ -21,7 +21,7 @@ struct WatchRideView: View {
     @EnvironmentObject private var session: WatchSessionManager
 
     var body: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: 4) {
             if session.moveName.isEmpty {
                 Image(systemName: "iphone.radiowaves.left.and.right")
                     .font(.title2).foregroundStyle(.secondary)
@@ -41,22 +41,29 @@ struct WatchRideView: View {
                     .foregroundStyle(.yellow)
                     .lineLimit(1).minimumScaleFactor(0.6)
                 }
+                // The same rider as the phone, holding the move's pose — static (battery), crank
+                // pinned so the right foot is planted on the "one".
+                MovePictogram(moveName: session.moveName, beatTime: 0,
+                              cadenceRevsPerBeat: session.moveRevsPerBeat,
+                              frozenOnTheOne: true, bikeStyle: .spin)
+                    .frame(width: 72, height: 72)
+                    .accessibilityHidden(true)
                 Text(session.moveName)
-                    .font(.system(.title2, design: .rounded).weight(.heavy))
+                    .font(.system(.headline, design: .rounded).weight(.heavy))
                     .multilineTextAlignment(.center)
                     .lineLimit(2).minimumScaleFactor(0.6)
                 if !session.cadenceLine.isEmpty {
                     Text(session.cadenceLine)
-                        .font(.footnote).monospacedDigit().foregroundStyle(.secondary)
+                        .font(.caption2).monospacedDigit().foregroundStyle(.secondary)
                 }
                 Label(session.resistanceUp ? "Resistance UP" : "Light",
                       systemImage: session.resistanceUp ? "dial.high.fill" : "dial.low.fill")
                     .font(.caption2)
                     .foregroundStyle(session.resistanceUp ? .orange : .secondary)
-                    .padding(.top, 2)
+                    .padding(.top, 1)
             }
         }
-        .padding()
+        .padding(.horizontal, 8)
     }
 }
 
@@ -67,6 +74,7 @@ final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
 
     @Published var moveName = ""
     @Published var cadenceLine = ""
+    @Published var moveRevsPerBeat: Double = 0.5
     @Published var countdownMove: String?
     @Published var countdownEnd: Date?
     @Published var resistanceUp = false
@@ -90,18 +98,21 @@ final class WatchSessionManager: NSObject, ObservableObject, WCSessionDelegate {
         let seconds = message["seconds"] as? Double
         let rpm = message["rpm"] as? Int
         let bpm = message["bpm"] as? Int
+        let revs = message["revs"] as? Double
         let up = message["up"] as? Bool
         Task { @MainActor in
             WatchSessionManager.shared.apply(event: event, name: name, seconds: seconds,
-                                             rpm: rpm, bpm: bpm, up: up)
+                                             rpm: rpm, bpm: bpm, revs: revs, up: up)
         }
     }
 
-    private func apply(event: String, name: String?, seconds: Double?, rpm: Int?, bpm: Int?, up: Bool?) {
+    private func apply(event: String, name: String?, seconds: Double?, rpm: Int?, bpm: Int?,
+                       revs: Double?, up: Bool?) {
         switch event {
         case "move":
             if let name { moveName = name }
             if let rpm, let bpm { cadenceLine = "~\(rpm) RPM · \(bpm) BPM" }
+            moveRevsPerBeat = revs ?? 0.5
             countdownMove = nil; countdownEnd = nil
             WKInterfaceDevice.current().play(.notification)          // transition buzz
         case "countdown":

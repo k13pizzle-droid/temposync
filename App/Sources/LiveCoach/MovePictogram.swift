@@ -30,6 +30,9 @@ struct MovePictogram: View {
     var countsIntoMove: Double = 0
     /// Crank revolutions per beat — how fast the legs turn (grind 0.25 / base 0.5 / sprint 1.0).
     var cadenceRevsPerBeat: Double = 0.5
+    /// Static display (the Watch): the body holds the move's most characteristic mid-motion
+    /// instant while the crank pins to the "one" — right foot planted at bottom-dead-center.
+    var frozenOnTheOne: Bool = false
     var bikeStyle: PictogramStyle = .spin
 
     var body: some View {
@@ -37,7 +40,10 @@ struct MovePictogram: View {
             let s = min(size.width, size.height) / 100
             ctx.scaleBy(x: s, y: s)
             let style = Style(moveName)
-            let pose = style.pose(at: beatTime, intoMove: countsIntoMove, revsPerBeat: cadenceRevsPerBeat)
+            var pose = style.pose(at: frozenOnTheOne ? 0.5 : beatTime,
+                                  intoMove: frozenOnTheOne ? 8 : countsIntoMove,
+                                  revsPerBeat: cadenceRevsPerBeat)
+            if frozenOnTheOne { pose.crankAngle = .pi / 2 }   // right foot on the one
 
             // Whole-glyph lean (corners) rotates about the bottom center.
             if pose.lean != 0 {

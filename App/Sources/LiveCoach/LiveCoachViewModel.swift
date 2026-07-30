@@ -134,6 +134,17 @@ final class LiveCoachViewModel: ObservableObject {
         watchTask?.cancel()
         lastWatchMove = ""; lastWatchResistance = false; watchCountdownActive = false
         sprintSeconds = 0; movesRidden = []
+        #if canImport(WatchConnectivity)
+        // When the channel comes back (activation, or wrist raised after a dead stretch), reset
+        // the diff state so the next 1 Hz tick re-sends full state — the wrist never sticks on a
+        // move it missed.
+        WatchCueSender.shared.onReconnect = { [weak self] in
+            guard let self, self.isRunning else { return }
+            self.lastWatchMove = ""
+            self.lastWatchResistance = false
+            self.watchCountdownActive = false
+        }
+        #endif
         #if canImport(ActivityKit)
         LiveActivityController.shared.start()
         #endif
@@ -170,7 +181,9 @@ final class LiveCoachViewModel: ObservableObject {
         if frame.currentMoveName != lastWatchMove, frame.currentMoveName != "—" {
             lastWatchMove = frame.currentMoveName
             WatchCueSender.shared.moveChanged(name: frame.currentMoveName,
-                                              rpm: frame.suggestedRPM, bpm: Int(frame.bpm))
+                                              rpm: frame.suggestedRPM, bpm: Int(frame.bpm),
+                                              revsPerBeat: frame.currentCadence.revsPerBeat,
+                                              formCue: frame.currentFormCue)
             #if os(iOS)
             VoiceCoach.shared.speak(frame.currentMoveName)
             #endif
@@ -504,11 +517,11 @@ final class LiveCoachViewModel: ObservableObject {
                 AppServices.context.insert(record)
                 try? AppServices.context.save()
 
+                // Health save happens when the summary sheet closes, so console-read distance can
+                // land inside the workout (RideSummaryView.finalize).
                 var healthLogged = false
                 #if canImport(HealthKit)
                 healthLogged = HealthLogger.shared.enabled
-                let end = Date.now
-                Task { await HealthLogger.shared.logRide(start: start, end: end) }
                 #endif
 
                 SummaryCenter.shared.pending = RideSummary(
@@ -531,6 +544,7 @@ final class LiveCoachViewModel: ObservableObject {
         #endif
         #if canImport(WatchConnectivity)
         WatchCueSender.shared.idle()
+        WatchCueSender.shared.onReconnect = nil
         #endif
         analyzeTask?.cancel(); analyzeTask = nil
         pollTask?.cancel(); pollTask = nil

@@ -30,6 +30,9 @@ struct RideHistoryView: View {
 
     private func summaryLine(_ ride: RideLogRecord) -> String {
         var parts = ["\(Int(ride.durationMinutes.rounded())) min", "\(ride.songsPlayed) songs"]
+        if let miles = ride.distanceMiles, miles > 0 {
+            parts.append(String(format: "%.1f mi", miles))
+        }
         if let format = ride.formatMinutes {
             parts.append("\(format)-min class" + ((ride.reordered ?? false) ? " · reordered" : ""))
         }

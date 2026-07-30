@@ -93,7 +93,7 @@ public struct LiveCoach: Sendable {
             bpm: clock.bpm,
             currentCadence: current?.cadence ?? .standard,
             currentMoveName: current?.name ?? "—",
-            currentFormCue: current?.formCue ?? "Ride the beat",
+            currentFormCue: state.activeFormCue ?? current?.formCue ?? "Ride the beat",
             currentPosition: current?.position ?? .seated,
             currentIntensity: current?.intensityTier ?? .recovery,
             nextMoveName: state.nextEvent?.move.name,

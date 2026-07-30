@@ -10,6 +10,9 @@ public struct PlaybackState: Sendable, Equatable {
     public let countsUntilNext: Int?
     /// A countdown cue whose lead window covers `count` (e.g. "JUMPS in 8"). Nil if none active.
     public let activeCountdown: Cue?
+    /// A non-empty form-cue text fired recently enough to still show (e.g. "Find the beat").
+    /// Nil once its display window passes — the move's own static cue takes over.
+    public let activeFormCue: String?
     /// True if resistance is currently raised (per the most recent resistance cue at or before count).
     public let resistanceUp: Bool
     /// Start count of the contiguous same-move BLOCK containing `count` (tiled events merged) —
@@ -33,6 +36,9 @@ public struct RoutinePlayer: Sendable {
     private let countdowns: [Cue]                         // countdown cues, atCount ascending
     private let maxCountdownLead: Int
     private let resistanceToggles: [(at: Int, up: Bool)]  // resistance cues, atCount ascending
+    private let formCues: [(at: Int, text: String)]       // non-empty form cues, atCount ascending
+    /// How long an event-level form cue stays on screen (counts) — half a phrase, ~7 s at 128 BPM.
+    private static let formCueWindow = 16
 
     public init(routine: Routine) {
         self.routine = routine
@@ -67,12 +73,15 @@ public struct RoutinePlayer: Sendable {
         // order wins" below matches the original full-scan semantics exactly.
         var cds: [Cue] = []
         var toggles: [(at: Int, up: Bool)] = []
+        var forms: [(at: Int, text: String)] = []
         for event in sorted {
             for cue in event.cues {
                 switch cue.type {
                 case .countdown:      cds.append(cue)
                 case .resistanceUp:   toggles.append((cue.atCount, true))
                 case .resistanceDown: toggles.append((cue.atCount, false))
+                case .form where !cue.text.isEmpty:
+                    forms.append((cue.atCount, cue.text))
                 default:              break
                 }
             }
@@ -80,6 +89,7 @@ public struct RoutinePlayer: Sendable {
         self.countdowns = cds
         self.maxCountdownLead = cds.compactMap { $0.leadBeats }.max() ?? 0
         self.resistanceToggles = toggles
+        self.formCues = forms
     }
 
     public func state(atCount count: Int) -> PlaybackState {
@@ -122,11 +132,19 @@ public struct RoutinePlayer: Sendable {
             resistanceUp = resistanceToggles[i].up
         }
 
+        // Form cue: the most recent non-empty one, only while its display window lasts.
+        var activeFormCue: String? = nil
+        if let i = lastIndex(in: formCues, atOrBefore: count, key: { $0.at }),
+           count < formCues[i].at + Self.formCueWindow {
+            activeFormCue = formCues[i].text
+        }
+
         return PlaybackState(
             currentEvent: current,
             nextEvent: next,
             countsUntilNext: countsUntilNext,
             activeCountdown: activeCountdown,
+            activeFormCue: activeFormCue,
             resistanceUp: resistanceUp,
             currentBlockStart: currentBlockStart
         )

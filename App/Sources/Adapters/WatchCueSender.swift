@@ -28,21 +28,32 @@ final class WatchCueSender: NSObject, WCSessionDelegate, @unchecked Sendable {
         WCSession.default.activate()
     }
 
-    private var canSend: Bool {
-        Self.cuesEnabled
+    /// Called on the main actor when the channel becomes usable (activation completed, or the
+    /// watch became reachable again after a wrist-down stretch). The ride loop resets its diff
+    /// state here and re-sends full state — without this, cues dropped while unreachable were
+    /// marked delivered and the wrist showed a stale move/resistance until the NEXT change.
+    var onReconnect: (@MainActor () -> Void)?
+
+    private func fireReconnect() {
+        Task { @MainActor in self.onReconnect?() }
+    }
+
+    private func canSend(bypassToggle: Bool) -> Bool {
+        (bypassToggle || Self.cuesEnabled)
             && WCSession.isSupported() && WCSession.default.activationState == .activated
             && WCSession.default.isPaired && WCSession.default.isReachable
     }
 
-    private func send(_ payload: [String: Any]) {
-        guard canSend else { return }
+    private func send(_ payload: [String: Any], bypassToggle: Bool = false) {
+        guard canSend(bypassToggle: bypassToggle) else { return }
         WCSession.default.sendMessage(payload, replyHandler: nil, errorHandler: nil)
     }
 
     // MARK: Events
 
-    func moveChanged(name: String, rpm: Int, bpm: Int) {
-        send(["event": "move", "name": name, "rpm": rpm, "bpm": bpm])
+    func moveChanged(name: String, rpm: Int, bpm: Int, revsPerBeat: Double, formCue: String) {
+        send(["event": "move", "name": name, "rpm": rpm, "bpm": bpm,
+              "revs": revsPerBeat, "cue": formCue])
     }
 
     /// One message per countdown window — the wrist buzzes once and counts down locally from
@@ -55,15 +66,22 @@ final class WatchCueSender: NSObject, WCSessionDelegate, @unchecked Sendable {
         send(["event": "resistance", "up": up])
     }
 
+    /// Clearing the wrist bypasses the cues toggle — switching cues off must never freeze the
+    /// watch on a stale ride.
     func idle() {
-        send(["event": "idle"])
+        send(["event": "idle"], bypassToggle: true)
     }
 
     // MARK: WCSessionDelegate
 
     func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState,
-                 error: Error?) {}
+                 error: Error?) {
+        if activationState == .activated { fireReconnect() }
+    }
     func sessionDidBecomeInactive(_ session: WCSession) {}
     func sessionDidDeactivate(_ session: WCSession) { session.activate() }
+    func sessionReachabilityDidChange(_ session: WCSession) {
+        if session.isReachable { fireReconnect() }
+    }
 }
 #endif
