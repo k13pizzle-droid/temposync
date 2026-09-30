@@ -1,0 +1,35 @@
+{
+  "permissions": {
+    "allow": [
+      "Read",
+      "Bash(swift --version)",
+      "Bash(swift build *)",
+      "Bash(swift build)",
+      "Bash(swift run *)",
+      "Bash(swift test *)",
+      "Bash(swift test)",
+      "Bash(swift package *)",
+      "Bash(xcodebuild -version)",
+      "Bash(xcodebuild -list *)",
+      "Bash(git status *)",
+      "Bash(git status)",
+      "Bash(git log *)",
+      "Bash(git diff *)",
+      "Bash(git diff)",
+      "Bash(git branch *)",
+      "Bash(git checkout -b *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git push -u origin *)",
+      "Bash(git pull *)",
+      "Bash(ls *)",
+      "Bash(cat *)",
+      "Bash(which *)"
+    ],
+    "deny": [
+      "Bash(git push --force *)",
+      "Bash(git push -f *)",
+      "Bash(rm -rf *)"
+    ]
+  }
+}
